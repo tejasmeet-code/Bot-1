@@ -164,6 +164,24 @@ async function writeSupabaseJson<T>(storeName: string, data: T): Promise<void> {
   }
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Timeout of ${timeoutMs}ms exceeded for ${label}`));
+    }, timeoutMs);
+
+    promise
+      .then((res) => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
 export async function loadPersistentJson<T>(
   storeName: string,
   filePath: string,
@@ -175,24 +193,27 @@ export async function loadPersistentJson<T>(
   }
 
   try {
-    const { data, error } = await client
+    const supabasePromise = client
       .from("bot_json_store")
       .select("payload")
       .eq("store_name", storeName)
       .maybeSingle();
 
+    const { data, error } = await withTimeout(supabasePromise, 3000, `load:${storeName}`);
+
     if (error) throw error;
     if (data?.payload != null) {
       return data.payload as T;
     }
-  } catch (err) {
-    logger.warn({ err, storeName }, "Persistent JSON store read failed; falling back to local file");
+  } catch (err: any) {
+    logger.warn({ err: err.message || String(err), storeName }, "Persistent JSON store read failed; falling back to local file");
   }
 
   const local = await readLocalJson(filePath, fallback);
 
   try {
-    await writeSupabaseJson(storeName, local);
+    const writePromise = writeSupabaseJson(storeName, local);
+    await withTimeout(writePromise, 2000, `write:${storeName}`);
   } catch {
     // Best-effort backfill only.
   }
@@ -213,9 +234,10 @@ export async function persistPersistentJson<T>(
   }
 
   try {
-    await writeSupabaseJson(storeName, data);
-  } catch (err) {
-    logger.warn({ err, storeName }, "Persistent JSON store write failed; local file saved");
+    const writePromise = writeSupabaseJson(storeName, data);
+    await withTimeout(writePromise, 2000, `write:${storeName}`);
+  } catch (err: any) {
+    logger.warn({ err: err.message || String(err), storeName }, "Persistent JSON store write failed; local file saved");
   }
 }
 

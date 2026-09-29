@@ -20,6 +20,7 @@ router.get("/download-patch", (_req, res) => {
     "bot/discord/messageHandler.ts",
     "bot/discord/commands/oping.ts",
     "bot/discord/music/musicManager.ts",
+    "bot/discord/storage/persistentJson.ts",
     "bot/index.ts",
     "render.yaml",
     "package.json"
