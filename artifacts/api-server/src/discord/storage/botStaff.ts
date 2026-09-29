@@ -1,13 +1,16 @@
 import { dataFile } from "../../lib/paths";
 import { loadPersistentJson, persistPersistentJson } from "./persistentJson";
-import { Client, EmbedBuilder, User } from "discord.js";
-import { CE, COLORS } from "../utils/embedStyle";
+import { Client, EmbedBuilder, ChannelType, type GuildMember } from "discord.js";
+import { CE, COLORS, SUPPORT_SERVER_URL } from "../utils/embedStyle";
 import { logger } from "../../lib/logger";
+import { safeSendUserDm } from "../utils/dmWebhook";
 
 const STORE = "bot_staff_store";
 const FILE = () => dataFile("bot_staff_store.json");
 
-export type BotStaffRole = "owner" | "co_owner" | "admin" | "mod" | "help";
+export const TEST_SERVER_STAFF_ROLE_ID = "1553398642835071056";
+
+export type BotStaffRole = "owner" | "co_owner" | "admin" | "head_tester" | "tester" | "mod" | "help" | "vip" | "homies";
 
 export interface BotStaffMember {
   userId: string;
@@ -45,6 +48,7 @@ export const BOT_STAFF_ROLES: Record<BotStaffRole, RoleMetadata> = {
       "Full lifetime premium access on your account and servers",
       "Immunity from moderation actions, timeouts, and automod filters",
       "Priority execution and server management privileges",
+      "Auto-granted Official Staff & Tester Role in the Test Server",
     ],
   },
   co_owner: {
@@ -60,6 +64,7 @@ export const BOT_STAFF_ROLES: Record<BotStaffRole, RoleMetadata> = {
       "Full lifetime premium access on your account and servers",
       "Immunity from moderation actions, timeouts, and automod filters",
       "Priority execution and server management privileges",
+      "Auto-granted Official Staff & Tester Role in the Test Server",
     ],
   },
   admin: {
@@ -72,9 +77,42 @@ export const BOT_STAFF_ROLES: Record<BotStaffRole, RoleMetadata> = {
     description: "Bot administration clearance, configuration controls, and user premium perks.",
     benefits: [
       "Access to bot administration and configuration tools",
-      "Full user premium clearance across all servers",
+      "Full lifetime user premium clearance across all servers",
       "Elevated moderation permissions and immunity from standard automod",
       "Ability to manage server setup wizards and diagnostics",
+      "Auto-granted Official Staff & Tester Role in the Test Server",
+    ],
+  },
+  head_tester: {
+    key: "head_tester",
+    name: "Head Tester",
+    title: "Bot Head Quality Assurance & Tester",
+    badge: "[HEAD-TESTER]",
+    color: 0x9B59B6, // Purple
+    emojiStr: CE.star.str,
+    description: "Lead testing oversight, early build access, and permanent Lifetime Premium.",
+    benefits: [
+      "**Full Lifetime Relosta Premium** granted automatically",
+      "Unrestricted Global No-Prefix Command Execution across all servers",
+      "Early access to upcoming releases, beta commands, and test builds",
+      "Direct testing channel access and priority issue triage in Testing Server",
+      "Auto-granted Official Tester Role (<@&1553398642835071056>) in Testing Server",
+    ],
+  },
+  tester: {
+    key: "tester",
+    name: "Tester",
+    title: "Bot Quality Assurance & Tester",
+    badge: "[TESTER]",
+    color: 0x1ABC9C, // Teal
+    emojiStr: CE.settings.str,
+    description: "Active feature testing, bug verification, and 1-Year Relosta Premium.",
+    benefits: [
+      "**1 Year (365 Days) Relosta Premium** granted automatically",
+      "Global No-Prefix Command Execution across all servers",
+      "Access to test commands, audio features, and stress testing builds",
+      "Dedicated Tester channels & developer communication",
+      "Auto-granted Official Tester Role (<@&1553398642835071056>) in Testing Server",
     ],
   },
   mod: {
@@ -89,6 +127,7 @@ export const BOT_STAFF_ROLES: Record<BotStaffRole, RoleMetadata> = {
       "Access to moderation commands, warning inspections, and user case logs",
       "Oversight on support tickets and moderation queues",
       "Bypass standard spam cooldowns and rate limits",
+      "Auto-granted Official Staff & Tester Role in the Test Server",
     ],
   },
   help: {
@@ -103,6 +142,37 @@ export const BOT_STAFF_ROLES: Record<BotStaffRole, RoleMetadata> = {
       "Official Relosta Bot Support Staff verification and badge",
       "Ability to guide server owners through .wizard and onboarding setups",
       "Priority ticket handling and access to community support channels",
+      "Auto-granted Official Staff & Tester Role in the Test Server",
+    ],
+  },
+  vip: {
+    key: "vip",
+    name: "VIP",
+    title: "Bot VIP Member",
+    badge: "[VIP]",
+    color: 0x9B59B6, // Purple
+    emojiStr: CE.star.str,
+    description: "Special VIP community member rank, Lifetime Premium, and profile badge recognition.",
+    benefits: [
+      "**Full Lifetime Relosta Premium** granted automatically",
+      "Official VIP badge displayed on your profile card graphic",
+      "Special VIP status and recognition across Relosta servers",
+      "Priority assistance in community support channels",
+    ],
+  },
+  homies: {
+    key: "homies",
+    name: "Homies",
+    title: "Bot Homies Rank",
+    badge: "[HOMIES]",
+    color: 0xEC4899, // Pink
+    emojiStr: CE.heart ? CE.heart.str : CE.star.str,
+    description: "Close community friend & Homies rank with Lifetime Premium and profile badge.",
+    benefits: [
+      "**Full Lifetime Relosta Premium** granted automatically",
+      "Official Homies rank badge on profile card graphic",
+      "Special Homies status and access in community channels",
+      "Exclusive community recognition",
     ],
   },
 };
@@ -136,7 +206,9 @@ export async function getBotStaffMember(userId: string): Promise<BotStaffMember 
 
 export async function isBotStaff(userId: string): Promise<boolean> {
   const store = await load();
-  return !!store.staff[userId];
+  const entry = store.staff[userId];
+  if (!entry) return false;
+  return entry.role !== "vip" && entry.role !== "homies";
 }
 
 export async function getBotStaffRole(userId: string): Promise<BotStaffRole | null> {
@@ -150,6 +222,63 @@ export async function removeBotStaffRole(userId: string): Promise<boolean> {
   delete store.staff[userId];
   await save(store);
   return true;
+}
+
+/**
+ * Creates or fetches a permanent invite link to the Bot Testing / Support server.
+ */
+export async function getTestingServerInvite(client?: Client): Promise<string> {
+  if (!client) return SUPPORT_SERVER_URL;
+
+  try {
+    for (const guild of client.guilds.cache.values()) {
+      const hasRole = guild.roles.cache.has(TEST_SERVER_STAFF_ROLE_ID);
+      if (hasRole) {
+        const textChannel = guild.channels.cache.find(
+          (c) => c.type === ChannelType.GuildText && (c as any).permissionsFor(guild.members.me!)?.has("CreateInstantInvite")
+        );
+        if (textChannel && "createInvite" in textChannel) {
+          const inv = await (textChannel as any).createInvite({
+            maxAge: 0,
+            maxUses: 0,
+            unique: false,
+            reason: "Permanent invite for Bot Staff & Testers",
+          });
+          if (inv?.url) return inv.url;
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, "Could not generate permanent test server invite; falling back to default");
+  }
+
+  return SUPPORT_SERVER_URL;
+}
+
+/**
+ * Ensures a staff/tester member is automatically assigned the tester role in any guild that contains it.
+ */
+export async function syncTesterRole(client: Client, userId: string): Promise<boolean> {
+  const userRole = await getBotStaffRole(userId);
+  // VIP and Homies are community/VIP ranks, NOT staff, so do NOT assign testing server role
+  if (userRole === "vip" || userRole === "homies") return false;
+
+  let roleAssigned = false;
+  try {
+    for (const guild of client.guilds.cache.values()) {
+      if (guild.roles.cache.has(TEST_SERVER_STAFF_ROLE_ID)) {
+        const member = guild.members.cache.get(userId) || (await guild.members.fetch(userId).catch(() => null));
+        if (member && !member.roles.cache.has(TEST_SERVER_STAFF_ROLE_ID)) {
+          await member.roles.add(TEST_SERVER_STAFF_ROLE_ID, "Auto-assigned Bot Staff / Tester role");
+          roleAssigned = true;
+          logger.info({ userId, guildId: guild.id }, "Auto-assigned tester role 1553398642835071056 to staff member");
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn({ err, userId }, "Failed to sync tester role to staff member");
+  }
+  return roleAssigned;
 }
 
 export async function setBotStaffRole(
@@ -168,43 +297,67 @@ export async function setBotStaffRole(
   store.staff[userId] = entry;
   await save(store);
 
-  // If role is owner, co_owner, or admin, also guarantee premium
-  if (role === "owner" || role === "co_owner" || role === "admin") {
-    try {
-      const { grantDirectPremium } = await import("./premium");
-      await grantDirectPremium(userId, "user", 3650); // 10 years / lifetime
-    } catch (err) {
-      logger.warn({ err, userId }, "Failed to auto-grant premium to bot staff");
+  // 1. Grant Premium based on appointed role:
+  // - Head Testers, Owners, Co-Owners, Admins, VIP, Homies: Lifetime Premium (9999 days)
+  // - Testers: 1 Year Premium (365 days)
+  try {
+    const { grantDirectPremium } = await import("./premium");
+    if (
+      role === "head_tester" ||
+      role === "owner" ||
+      role === "co_owner" ||
+      role === "admin" ||
+      role === "vip" ||
+      role === "homies"
+    ) {
+      await grantDirectPremium(userId, "user", 9999);
+    } else if (role === "tester") {
+      await grantDirectPremium(userId, "user", 365);
     }
+  } catch (err) {
+    logger.warn({ err, userId }, "Failed to grant premium to appointed user");
   }
 
-  // Send Direct Message to the user detailing their role and benefits
+  // 2. Sync testing server role ONLY if user is a staff member (NOT VIP or Homies)
+  if (client && role !== "vip" && role !== "homies") {
+    await syncTesterRole(client, userId);
+  }
+
+  // 3. Create permanent invite link to test server & send official DM
   let dmSent = false;
   if (client) {
     try {
       const user = await client.users.fetch(userId).catch(() => null);
       if (user) {
         const meta = BOT_STAFF_ROLES[role];
+        const inviteUrl = await getTestingServerInvite(client);
+        const isStaffRole = role !== "vip" && role !== "homies";
+        const isLifetime = role === "head_tester" || role === "owner" || role === "co_owner" || role === "admin" || role === "vip" || role === "homies";
+
         const dmEmbed = new EmbedBuilder()
-          .setTitle(`${meta.emojiStr} Congratulations! You've been appointed **${meta.title}**`)
+          .setTitle(`${meta.emojiStr} Official Appointment: **${meta.title}**`)
           .setColor(meta.color)
           .setDescription(
-            `You have been appointed to the official **Relosta Bot Staff Team** by the Bot Owner.\n\n` +
-            `**Your Role:** ${meta.emojiStr} \`${meta.name.toUpperCase()}\` (${meta.badge})\n` +
-            `**Appointed By:** <@${assignedBy}>\n` +
-            `**Date:** <t:${Math.floor(Date.now() / 1000)}:D>\n\n` +
-            `### ${CE.check.str} Your Role Benefits & Privileges:\n` +
+            `Greetings **${user.username}**! You have been officially appointed as **${meta.name}** by <@${assignedBy}>!\n\n` +
+            `**Appointed Rank:** ${meta.emojiStr} \`${meta.name.toUpperCase()}\` (${meta.badge})\n` +
+            `**Premium Status:** ${isLifetime ? "**Lifetime Relosta VIP Access**" : role === "tester" ? "**1 Year (365 Days) VIP Access**" : "Active Clearance"}\n` +
+            `**Official Community Server:** [Click to Join Server](${inviteUrl})\n\n` +
+            `### **Your Unlocked Role Benefits & Privileges:**\n` +
             meta.benefits.map((b) => `• ${b}`).join("\n") +
-            `\n\n*Welcome aboard! Use your permissions responsibly.*`
+            (isStaffRole
+              ? `\n\n> **Testing Server Role:** When you join the testing server, you will automatically be granted role <@&${TEST_SERVER_STAFF_ROLE_ID}>!\n\n`
+              : "\n\n") +
+            `*Enjoy your new privileges!*`
           )
-          .setFooter({ text: "Relosta Bot Staff Administration" })
+          .setThumbnail("https://cdn-icons-png.flaticon.com/512/9446/9446755.png")
+          .setFooter({ text: "Relosta Official Administration Directive" })
           .setTimestamp();
 
-        await user.send({ embeds: [dmEmbed] }).catch(() => null);
-        dmSent = true;
+        const dmResult = await safeSendUserDm(user, { embeds: [dmEmbed] }, `Official Appointment: ${meta.title}`);
+        dmSent = dmResult.success;
       }
     } catch (err) {
-      logger.warn({ err, userId }, "Could not send DM to newly appointed staff member");
+      logger.warn({ err, userId }, "Could not send DM to newly appointed member");
     }
   }
 

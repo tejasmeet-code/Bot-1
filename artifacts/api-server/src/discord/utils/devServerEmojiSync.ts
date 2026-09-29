@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { promises as fsp } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   type Client,
   type Guild,
@@ -9,6 +10,9 @@ import {
 import { logger } from "../../lib/logger";
 import { dataFile } from "../../lib/paths";
 import { CE, updateCustomEmoji } from "./embedStyle";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface EmojiAssetSpec {
   key: string;
@@ -74,19 +78,19 @@ export function findAssetsDir(): string | null {
 
 /** Find the target Dev Server guild */
 export function findDevGuild(client: Client): Guild | null {
-  // 1. Explicit target: name matches "relosta" + "dev"
-  const relostaDev = client.guilds.cache.find(
-    (g) => /relosta/i.test(g.name) && /dev/i.test(g.name),
+  // 1. Explicit target: name matches "zenith" + "dev"
+  const zenithDev = client.guilds.cache.find(
+    (g) => /zenith/i.test(g.name) && /dev/i.test(g.name),
   );
-  if (relostaDev) return relostaDev;
+  if (zenithDev) return zenithDev;
 
   // 2. Name matches "dev"
   const devGuild = client.guilds.cache.find((g) => /\bdev\b/i.test(g.name));
   if (devGuild) return devGuild;
 
-  // 3. Name matches "relosta"
-  const relostaGuild = client.guilds.cache.find((g) => /relosta/i.test(g.name));
-  if (relostaGuild) return relostaGuild;
+  // 3. Name matches "zenith"
+  const zenithGuild = client.guilds.cache.find((g) => /zenith/i.test(g.name));
+  if (zenithGuild) return zenithGuild;
 
   // 4. Any guild where bot has ManageGuildExpressions or Administrator permissions
   const permGuild = client.guilds.cache.find((g) => {
@@ -127,7 +131,7 @@ export function loadSavedCustomEmojis(): void {
 }
 
 /**
- * Upload all old emojis from attached_assets to the Relosta Bot Dev Server,
+ * Upload all old emojis from attached_assets to the Zenith Bot Dev Server,
  * then update the CE registry and persist the mapping so bots always use
  * pure custom emojis.
  */
@@ -206,7 +210,7 @@ export async function syncDevServerEmojis(client: Client<true>): Promise<{
         if (fs.existsSync(filePath)) {
           let buffer = await fsp.readFile(filePath);
           try {
-            const sharp = (await import("sharp")).default;
+            const sharp = (await import("sharp" as any)).default;
             buffer = await sharp(buffer)
               .resize(128, 128, { fit: "inside" })
               .png({ quality: 90, compressionLevel: 9 })
@@ -218,7 +222,7 @@ export async function syncDevServerEmojis(client: Client<true>): Promise<{
           const created = await devGuild.emojis.create({
             attachment: buffer,
             name: spec.name,
-            reason: "Relosta bot Dev server emoji sync",
+            reason: "Zenith bot Dev server emoji sync",
           }).catch(() => null);
 
           if (created) {

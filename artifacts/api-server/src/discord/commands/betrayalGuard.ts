@@ -129,7 +129,7 @@ export const betrayalGuardCommand: SlashCommand = {
           `• **Mass Channel Delete Limit:** \`${cfg.actionThresholds.massChannelDelete}\` deletes/min\n` +
           `• **Mass Webhook Create Limit:** \`${cfg.actionThresholds.massWebhookCreate}\` webhooks/min\n\n` +
           `> ${CE.clipboard.str} **Recent Intercepted Incidents:** \`${incidents.length}\` betrayal events logged`,
-        footer: "Relosta Betrayal Guard • VIP Security Engine",
+        footer: "Zenith Betrayal Guard • VIP Security Engine",
       });
       await interaction.reply({ embeds: [embed] });
       return;
@@ -252,7 +252,7 @@ export const betrayalGuardCommand: SlashCommand = {
         color: 0xed4245,
         description:
           `### ${CE.admin.str} **TEST SECURITY ALERT FOR OWNER**\n\n` +
-          `This is a test dispatch from **Relosta Betrayal Guard** in **${guild.name}**.\n` +
+          `This is a test dispatch from **Zenith Betrayal Guard** in **${guild.name}**.\n` +
           `If a staff member attempts rogue mass-bans or channel deletions, you will receive a real-time notification formatted like this with the staff member's details!`,
       });
 

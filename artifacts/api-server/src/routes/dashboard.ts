@@ -55,8 +55,8 @@ router.get("/overview", async (_req: Request, res: Response): Promise<void> => {
       statusText: isReady ? "Bot is online and healthy!" : "Bot is starting up...",
       bot: {
         id: botUser?.id || process.env.DISCORD_CLIENT_ID || "Unknown",
-        username: botUser?.username || "Relosta Bot",
-        tag: botUser?.tag || "Relosta#0000",
+        username: botUser?.username || "Zenith Bot",
+        tag: botUser?.tag || "Zenith#0000",
         avatar: botUser?.displayAvatarURL({ size: 256 }) || null,
         verified: botUser?.verified || false,
         activity: botUser?.presence?.activities[0]?.name || "Online & Protecting Servers",
@@ -471,7 +471,7 @@ router.post("/broadcast", async (req: Request, res: Response): Promise<void> => 
       title: title?.trim() || "📢 Official Bot Broadcast Announcement",
       description: message.trim(),
       color: COLORS.primary,
-      footer: "Relosta Central Operations Dashboard",
+      footer: "Zenith Central Operations Dashboard",
     });
 
     for (const guild of guilds) {

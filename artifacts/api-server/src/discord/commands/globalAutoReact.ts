@@ -72,7 +72,7 @@ export function buildGlobalAutoReactPanel(store: GlobalAutoReactStore): {
       `• \`.gar list\` — View full details of all active rules\n` +
       `• \`.gar clear\` — Clear all global auto-reaction rules`
     )
-    .setFooter({ text: "Relosta Global Infrastructure • Owner & Co-Owner Exclusive" })
+    .setFooter({ text: "Zenith Global Infrastructure • Owner & Co-Owner Exclusive" })
     .setTimestamp();
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(

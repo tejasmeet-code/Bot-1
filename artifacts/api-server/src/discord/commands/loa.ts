@@ -134,7 +134,7 @@ const command: SlashCommand = {
         ])}`,
         thumbnail: interaction.user.displayAvatarURL({ size: 256 }),
         color: COLORS.warning,
-        footer: `Submitted • Relosta Bot`,
+        footer: `Submitted • Zenith Bot`,
       });
 
       // Reply to the staff member
@@ -148,7 +148,7 @@ const command: SlashCommand = {
             { label: "Status",     value: "Pending — awaiting manager review" },
           ])}`,
           color: COLORS.info,
-          footer: "You'll be notified when it's reviewed • Relosta Bot",
+          footer: "You'll be notified when it's reviewed • Zenith Bot",
         })],
       });
 
@@ -163,7 +163,7 @@ const command: SlashCommand = {
             { label: "Status",      value: "Pending — awaiting manager review" },
           ])}`,
           color: COLORS.info,
-          footer: "You'll be DM'd again when a manager reviews it • Relosta Bot",
+          footer: "You'll be DM'd again when a manager reviews it • Zenith Bot",
         })],
       }).catch(() => {});
 
@@ -208,7 +208,7 @@ const command: SlashCommand = {
           title: `LOA Requests — ${statusFilter === "all" ? "All" : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}`,
           description: lines.join("\n"),
           color: COLORS.info,
-          footer: `${loas.length} total • Relosta Bot`,
+          footer: `${loas.length} total • Zenith Bot`,
         })],
       });
 
@@ -234,7 +234,7 @@ const command: SlashCommand = {
           ])}`,
           thumbnail: target.displayAvatarURL({ size: 256 }),
           color: COLORS.success,
-          footer: "Relosta Bot",
+          footer: "Zenith Bot",
         })],
       });
 
@@ -249,7 +249,7 @@ const command: SlashCommand = {
             ...(pending.returnDate ? [{ label: "Return Date", value: pending.returnDate }] : []),
           ])}`,
           color: COLORS.success,
-          footer: "Use /loa end when you return • Relosta Bot",
+          footer: "Use /loa end when you return • Zenith Bot",
         })],
       }).catch(() => {});
 
@@ -269,7 +269,7 @@ const command: SlashCommand = {
               ]),
               thumbnail: target.displayAvatarURL({ size: 256 }),
               color: COLORS.success,
-              footer: "Relosta Bot",
+              footer: "Zenith Bot",
             })],
           }).catch(() => {});
         }
@@ -297,7 +297,7 @@ const command: SlashCommand = {
           ])}`,
           thumbnail: target.displayAvatarURL({ size: 256 }),
           color: COLORS.danger,
-          footer: "Relosta Bot",
+          footer: "Zenith Bot",
         })],
       });
 
@@ -311,7 +311,7 @@ const command: SlashCommand = {
             { label: "Reason",    value: denyReason },
           ])}`,
           color: COLORS.danger,
-          footer: "You may submit a new request if circumstances change • Relosta Bot",
+          footer: "You may submit a new request if circumstances change • Zenith Bot",
         })],
       }).catch(() => {});
 
@@ -330,7 +330,7 @@ const command: SlashCommand = {
               ]),
               thumbnail: target.displayAvatarURL({ size: 256 }),
               color: COLORS.danger,
-              footer: "Relosta Bot",
+              footer: "Zenith Bot",
             })],
           }).catch(() => {});
         }
@@ -358,7 +358,7 @@ const command: SlashCommand = {
             ...(ended.returnDate ? [{ label: "Planned return", value: ended.returnDate }] : []),
           ])}`,
           color: COLORS.success,
-          footer: "Welcome back! • Relosta Bot",
+          footer: "Welcome back! • Zenith Bot",
         })],
       }).catch(() => {});
 
@@ -378,7 +378,7 @@ const command: SlashCommand = {
               ]),
               thumbnail: interaction.user.displayAvatarURL({ size: 256 }),
               color: COLORS.success,
-              footer: "Relosta Bot",
+              footer: "Zenith Bot",
             })],
           }).catch(() => {});
         }
@@ -459,7 +459,7 @@ const command: SlashCommand = {
           thumbnail: subject.displayAvatarURL({ size: 256 }),
           color: COLORS.info,
           fields,
-          footer: `Page ${clampedPage} of ${totalPages} • Relosta Bot`,
+          footer: `Page ${clampedPage} of ${totalPages} • Zenith Bot`,
         })],
       });
     }

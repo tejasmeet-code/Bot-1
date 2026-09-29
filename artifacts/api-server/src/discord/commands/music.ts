@@ -45,20 +45,23 @@ export async function getMemberVoiceChannel(
   if (!guild || !userId) return null;
 
   try {
-    const vs = guild.voiceStates.cache.get(userId);
-    if (vs?.channelId) {
-      const ch = guild.channels.cache.get(vs.channelId) ?? (await guild.channels.fetch(vs.channelId).catch(() => null));
-      if (ch && ch.isVoiceBased()) return ch as VoiceBasedChannel;
-    }
-
-    const member = guild.members.cache.get(userId) ?? (await guild.members.fetch(userId).catch(() => null));
+    const member = (await guild.members.fetch(userId).catch(() => null)) ?? guild.members.cache.get(userId);
     if (member?.voice?.channel) {
       return member.voice.channel as VoiceBasedChannel;
     }
 
-    for (const ch of guild.channels.cache.values()) {
-      if (ch.isVoiceBased() && ch.members.has(userId)) {
-        return ch as VoiceBasedChannel;
+    const vs = guild.voiceStates.cache.get(userId);
+    if (vs?.channelId) {
+      const ch = (await guild.channels.fetch(vs.channelId).catch(() => null)) ?? guild.channels.cache.get(vs.channelId);
+      if (ch && ch.isVoiceBased()) return ch as VoiceBasedChannel;
+    }
+
+    const channels = await guild.channels.fetch().catch(() => null);
+    if (channels) {
+      for (const ch of channels.values()) {
+        if (ch && ch.isVoiceBased() && ch.members.has(userId)) {
+          return ch as VoiceBasedChannel;
+        }
       }
     }
   } catch {}
@@ -167,15 +170,15 @@ export const playCommand: SlashCommand = {
         }
 
         const premiumEmbed = prettyEmbed({
-          title: "Relosta Premium Feature Required",
+          title: "Zenith Premium Feature Required",
           color: 0xF1C40F,
           description:
             `### ${CE.star.str}  **VIP Remote Playback Mode**\n\n` +
-            `Remotely summoning music into a voice channel using channel ID or user mention without being in the VC is an exclusive **Relosta Premium** feature!\n\n` +
+            `Remotely summoning music into a voice channel using channel ID or user mention without being in the VC is an exclusive **Zenith Premium** feature!\n\n` +
             `• **Free Usage**: Connect to any voice channel yourself and run \`.play <song>\` for free.\n` +
             `• **Premium Perks**: Summon the bot to any VC using channel ID/mention or user ID/mention without joining it!\n\n` +
             `👑 **Unlock god-tier perks today:** [Claim VIP Access](https://discord.gg/gFgAfpSYdp)`,
-          footer: "👑 Relosta Audio VIP Engine • Upgrade: discord.gg/gFgAfpSYdp",
+          footer: "👑 Zenith Audio VIP Engine • Upgrade: discord.gg/gFgAfpSYdp",
         });
         await interaction.reply({
           embeds: [premiumEmbed],
@@ -245,11 +248,11 @@ export const playCommand: SlashCommand = {
             `> **Queue Position:** \`#${player.queue.length}\` • **Target Channel:** <#${voiceChannel.id}>\n` +
             `> **Requested By:** <@${interaction.user.id}>\n\n` +
             `💎 **Tired of random bot leaves and audio drops?**\n` +
-            `Upgrade to **Relosta Premium** for dedicated 24/7 Voice nodes, zero queue delays, and instantaneous song buffering.\n\n` +
+            `Upgrade to **Zenith Premium** for dedicated 24/7 Voice nodes, zero queue delays, and instantaneous song buffering.\n\n` +
             `👑 **Join elite communities:** [Claim VIP Access](https://discord.gg/gFgAfpSYdp)`,
           thumbnail: track.thumbnailUrl,
           color: COLORS.primary,
-          footer: "👑 Relosta High-Fidelity Audio • Upgrade: discord.gg/gFgAfpSYdp",
+          footer: "👑 Zenith High-Fidelity Audio • Upgrade: discord.gg/gFgAfpSYdp",
         });
 
         await interaction.editReply({
@@ -642,7 +645,7 @@ export const queueCommand: SlashCommand = {
           current
             ? `### ${CE.play.str}  **Now Playing**\n` +
               `**[${current.title}](${current.url})** - \`${current.artist}\` (${formatTime(current.durationSeconds)})\n` +
-              `**Source:** \`${current.sourceName || "JioSaavn 320kbps Lossless"}\` • Req by <@${current.requestedBy.id}>\n\n` +
+              `**Source:** \`${current.sourceName || "YouTube / SoundCloud HQ Audio"}\` • Req by <@${current.requestedBy.id}>\n\n` +
               `*Queue is empty — add upcoming songs with \`/play\`!*`
             : "*No track currently playing*",
         fields: [
@@ -673,7 +676,7 @@ export const queueCommand: SlashCommand = {
             (current
               ? `### ${CE.play.str} **Now Playing**\n` +
                 `**[${current.title}](${current.url})** - \`${current.artist}\` (\`${formatTime(current.durationSeconds)}\`)\n` +
-                `**Active Source:** \`${current.sourceName || "JioSaavn 320kbps Lossless"}\` • Req by <@${current.requestedBy.id}>\n\n`
+                `**Active Source:** \`${current.sourceName || "YouTube / SoundCloud HQ Audio"}\` • Req by <@${current.requestedBy.id}>\n\n`
               : "") +
             `### ${CE.clipboard.str} **Up Next (${player.queue.length} Tracks)**\n` +
             queueList.join("\n"),
@@ -687,7 +690,7 @@ export const queueCommand: SlashCommand = {
     }
 
     await sendPaginatedEmbed(interaction, pages, {
-      footerPrefix: "Relosta Audio VIP Engine",
+      footerPrefix: "Zenith Audio VIP Engine",
     });
   },
 };
@@ -744,7 +747,7 @@ export const sourceCommand: SlashCommand = {
       description:
         `### ${CE.music.str} **[${track.title}](${track.url})**\n` +
         `**Artist:** \`${track.artist}\`\n` +
-        `**Current Active Source:** \`${track.sourceName || "JioSaavn 320kbps Lossless"}\`\n\n` +
+        `**Current Active Source:** \`${track.sourceName || "YouTube / SoundCloud HQ Audio"}\`\n\n` +
         `Select an alternative high-fidelity audio stream below to switch in real-time:`,
       color: COLORS.primary,
     });
@@ -1059,15 +1062,15 @@ export const twentyFourSevenCommand: SlashCommand = {
     const isPremium = await hasPremiumAccess(interaction.user.id, interaction.guildId, interaction.member);
     if (!isPremium) {
       const premiumEmbed = prettyEmbed({
-        title: "Relosta Premium Feature Required",
+        title: "Zenith Premium Feature Required",
         color: 0xF1C40F,
         description:
           `### ${CE.star.str}  **VIP 24/7 Voice Channel Radio Mode**\n\n` +
-          `**24/7 Voice Channel Radio Mode** and remote VC connection are exclusive to **Relosta Premium**!\n\n` +
+          `**24/7 Voice Channel Radio Mode** and remote VC connection are exclusive to **Zenith Premium**!\n\n` +
           `• **24/7 Mode Perks**: Bot stays anchored in your server's voice channel permanently even when everyone leaves, streaming non-stop high-fidelity audio.\n` +
           `• **Remote VC Summon**: Anchor into any VC using channel ID or user mention without needing to be in the voice channel yourself.\n\n` +
           `👑 **Upgrade to God-Mode Audio:** [Claim VIP Access](https://discord.gg/gFgAfpSYdp)`,
-        footer: "👑 Relosta Audio VIP Engine • Upgrade: discord.gg/gFgAfpSYdp",
+        footer: "👑 Zenith Audio VIP Engine • Upgrade: discord.gg/gFgAfpSYdp",
       });
       await interaction.reply({
         embeds: [premiumEmbed],
@@ -1221,39 +1224,39 @@ export const twentyFourSevenCommand: SlashCommand = {
       let desc = "";
       if (matchedType === "artist" && identifiedArtist) {
         desc =
-          `**Relosta Bot** is now playing all songs by **${identifiedArtist}** 24/7!\n\n` +
+          `**Zenith Bot** is now playing all songs by **${identifiedArtist}** 24/7!\n\n` +
           `• **Singer / Artist:** **${identifiedArtist}**\n` +
           `• **Discography Loaded:** \`${loadedSongCount}\` songs queued in 24/7 rotation\n` +
           `• **Audio Track Mode:** ${songModeBadge}\n` +
           `• **Now Playing:** **${startingTrack?.title}**\n` +
           `• **Target Channel:** <#${player.voiceChannel.id}>\n` +
-          `• **VIP Tier:** Relosta Premium Active`;
+          `• **VIP Tier:** Zenith Premium Active`;
       } else if (matchedType === "album" && identifiedAlbum) {
         desc =
-          `**Relosta Bot** is now streaming the **${identifiedAlbum}** album 24/7!\n\n` +
+          `**Zenith Bot** is now streaming the **${identifiedAlbum}** album 24/7!\n\n` +
           `• **Album:** **${identifiedAlbum}**\n` +
           `• **Artist:** **${identifiedArtist}**\n` +
           `• **Album Tracks:** \`${loadedSongCount}\` songs queued in sequence\n` +
           `• **Audio Track Mode:** ${songModeBadge}\n` +
           `• **Now Playing:** **${startingTrack?.title}**\n` +
           `• **Target Channel:** <#${player.voiceChannel.id}>\n` +
-          `• **VIP Tier:** Relosta Premium Active`;
+          `• **VIP Tier:** Zenith Premium Active`;
       } else if (startingTrack) {
         desc =
-          `**Relosta Bot** is now streaming **${startingTrack.title}** and related 24/7 tracks!\n\n` +
+          `**Zenith Bot** is now streaming **${startingTrack.title}** and related 24/7 tracks!\n\n` +
           `• **Starting Track:** **${startingTrack.title}** by **${startingTrack.artist}**\n` +
           `• **Audio Track Mode:** ${songModeBadge}\n` +
           `• **24/7 Stream:** Continuous non-stop music seeded from \`${query}\`\n` +
           `• **Target Channel:** <#${player.voiceChannel.id}>\n` +
-          `• **VIP Tier:** Relosta Premium Active`;
+          `• **VIP Tier:** Zenith Premium Active`;
       } else {
         desc =
-          `**Relosta Bot** is now permanently anchored in <#${player.voiceChannel.id}> 24/7!\n\n` +
+          `**Zenith Bot** is now permanently anchored in <#${player.voiceChannel.id}> 24/7!\n\n` +
           `• **Mode:** Permanent 24/7 Non-stop Voice Playback\n` +
           `• **Audio Track Mode:** ${songModeBadge}\n` +
           `• **Target Channel:** <#${player.voiceChannel.id}>\n` +
           `• **Auto-Reconnect:** Active (Bot will never disconnect even if VC is empty)\n` +
-          `• **VIP Tier:** Relosta Premium Active`;
+          `• **VIP Tier:** Zenith Premium Active`;
       }
 
       const embed = prettyEmbed({
@@ -1270,12 +1273,12 @@ export const twentyFourSevenCommand: SlashCommand = {
           `\n\n> 👑 **VIP Audio Pass:** Continuous 24/7 playback with 0% downtime and dedicated streaming priority.`,
         thumbnail: startingTrack ? startingTrack.thumbnailUrl : "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?q=80&w=600&auto=format&fit=crop",
         image: "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?q=80&w=1200&auto=format&fit=crop",
-        footer: "👑 Relosta 24/7 VIP Engine • Support: discord.gg/gFgAfpSYdp",
+        footer: "👑 Zenith 24/7 VIP Engine • Support: discord.gg/gFgAfpSYdp",
       });
 
       await interaction.reply({
         embeds: [embed],
-        components: [buildSupportRow("⚡ Relosta VIP Hub")],
+        components: [buildSupportRow("⚡ Zenith VIP Hub")],
       });
     } else {
       await player.set247(false);
@@ -1335,7 +1338,7 @@ export const panelCommand: SlashCommand = {
 export const searchCommand: SlashCommand = {
   data: new SlashCommandBuilder()
     .setName("search")
-    .setDescription("Search top songs from Apple Music, YouTube, Spotify, Gaana, JioSaavn and pick a track to play")
+    .setDescription("Search top songs from YouTube, Spotify, SoundCloud, Apple Music and pick a track to play")
     .addStringOption((o) =>
       o.setName("query").setDescription("Song name, artist, or keywords").setRequired(true),
     ),
@@ -1370,15 +1373,20 @@ export const searchCommand: SlashCommand = {
       return;
     }
 
+    const getAppEmoji = (name: string, fallbackUnicode: string) => {
+      const found = interaction.client.emojis.cache.find(e => e.name?.toLowerCase() === name.toLowerCase());
+      return found ? found.toString() : fallbackUnicode;
+    };
+
     // Build top 10 search results list
     const searchList = results.map((t, idx) => {
-      const sourceBadge = t.url.includes("jiosaavn")
-        ? "🎶 JioSaavn"
-        : t.url.includes("spotify")
-          ? "🎵 Spotify"
-          : t.url.includes("youtube")
-            ? "▶️ YouTube"
-            : "🍏 Apple Music";
+      const sourceBadge = t.url.includes("spotify")
+        ? `${getAppEmoji("spotify", "🎵")} Spotify`
+        : t.url.includes("youtube")
+          ? `${getAppEmoji("youtube", "▶️")} YouTube`
+          : t.url.includes("soundcloud")
+            ? `${getAppEmoji("soundcloud", "🎵")} SoundCloud`
+            : `${getAppEmoji("applemusic", "🍏")} Apple Music`;
       return `\`${idx + 1}.\` ${sourceBadge} **[${t.title}](${t.url})**\n> **Artist:** \`${t.artist}\` • **Duration:** \`${formatTime(t.durationSeconds)}\``;
     });
 
@@ -1389,15 +1397,25 @@ export const searchCommand: SlashCommand = {
         searchList.join("\n\n") +
         `\n\n*Choose an option from the dropdown menu below to play or queue the song immediately!*`,
       color: COLORS.primary,
-      footer: "Relosta Search Picker • Select below within 60 seconds",
+      footer: "Zenith Search Picker • Select below within 60 seconds",
     });
 
     // Create StringSelectMenu options
     const selectOptions = results.slice(0, 10).map((t, idx) => {
-      return new StringSelectMenuOptionBuilder()
+      const opt = new StringSelectMenuOptionBuilder()
         .setLabel(`${idx + 1}. ${t.title.slice(0, 75)}`)
         .setValue(`search_pick:${idx}:${encodeURIComponent(t.title.slice(0, 30))}`)
         .setDescription(`by ${t.artist.slice(0, 45)} (${formatTime(t.durationSeconds)})`);
+
+      const emojiName = t.url.includes("spotify") ? "spotify" : t.url.includes("youtube") ? "youtube" : t.url.includes("soundcloud") ? "soundcloud" : "applemusic";
+      const foundEmoji = interaction.client.emojis.cache.find(e => e.name?.toLowerCase() === emojiName);
+      if (foundEmoji) {
+        opt.setEmoji(foundEmoji.id);
+      } else {
+        const fallbackUnicode = t.url.includes("spotify") ? "🎵" : t.url.includes("youtube") ? "▶️" : "🍏";
+        opt.setEmoji(fallbackUnicode);
+      }
+      return opt;
     });
 
     // Cache the search results on global temp map for interaction handler

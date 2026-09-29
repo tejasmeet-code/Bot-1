@@ -35,47 +35,67 @@ export function getDiscordClient(): Client {
 let isBotStartingOrStarted = false;
 
 export async function startDiscordBot(): Promise<void> {
-  if (isBotStartingOrStarted || (globalThis as any).__discordClient) {
-    logger.warn("startDiscordBot called but Discord bot is already started. Skipping duplicate start.");
+  console.log("[boot] startDiscordBot called");
+  if (isBotStartingOrStarted && (globalThis as any).__discordClient?.isReady()) {
+    logger.warn("startDiscordBot called but Discord bot is already started and ready. Skipping duplicate start.");
     return;
   }
+
+  // Destroy previous client if present
+  if ((globalThis as any).__discordClient) {
+    try {
+      (globalThis as any).__discordClient.destroy();
+    } catch {}
+    (globalThis as any).__discordClient = null;
+  }
+
   isBotStartingOrStarted = true;
-  const { loadSavedCustomEmojis } = await import("./utils/devServerEmojiSync");
-  loadSavedCustomEmojis();
-  await initPermWhitelist();
-  const client = new Client({
-    intents: [
-      IntentsBitField.Flags.Guilds,
-      IntentsBitField.Flags.GuildMembers,
-      IntentsBitField.Flags.GuildMessages,
-      IntentsBitField.Flags.MessageContent,
-      IntentsBitField.Flags.GuildModeration,
-      IntentsBitField.Flags.DirectMessages,
-      IntentsBitField.Flags.GuildVoiceStates,
-    ],
-    // Partials are required so uncached DM channels still fire MessageCreate
-    partials: [Partials.Channel, Partials.Message],
-  });
 
-  // Set global client reference for schedulers
-  (globalThis as any).__discordClient = client;
+  try {
+    console.log("[boot] importing and loading devServerEmojiSync");
+    const { loadSavedCustomEmojis } = await import("./utils/devServerEmojiSync");
+    loadSavedCustomEmojis();
+    console.log("[boot] calling initPermWhitelist");
+    await initPermWhitelist();
+    console.log("[boot] completed initPermWhitelist");
 
-  const token = process.env.DISCORD_BOT_TOKEN;
-  const clientId = process.env.DISCORD_CLIENT_ID;
-  if (!token) {
-    throw new Error("DISCORD_BOT_TOKEN environment variable is not set");
-  }
-  if (!clientId) {
-    throw new Error("DISCORD_CLIENT_ID environment variable is not set");
-  }
+    const token = process.env.DISCORD_BOT_TOKEN;
+    const clientId = process.env.DISCORD_CLIENT_ID;
+    if (!token) {
+      throw new Error("DISCORD_BOT_TOKEN environment variable is not set");
+    }
+    if (!clientId) {
+      throw new Error("DISCORD_CLIENT_ID environment variable is not set");
+    }
 
+    console.log("[boot] creating Discord.js Client");
+    const client = new Client({
+      intents: [
+        IntentsBitField.Flags.Guilds,
+        IntentsBitField.Flags.GuildMembers,
+        IntentsBitField.Flags.GuildMessages,
+        IntentsBitField.Flags.MessageContent,
+        IntentsBitField.Flags.GuildModeration,
+        IntentsBitField.Flags.DirectMessages,
+        IntentsBitField.Flags.GuildVoiceStates,
+      ],
+      partials: [Partials.Channel, Partials.Message],
+    });
+
+    (globalThis as any).__discordClient = client;
+
+  console.log("[boot] setting up REST");
   const rest = new REST({ version: "10" }).setToken(token);
   // Only register commands within Discord's 100-command limit.
   // Fun/game commands are excluded via getGuildCommands() in registry.ts.
+  console.log("[boot] fetching registrableCommands");
   const registrableCommands = getGuildCommands();
+  console.log("[boot] map commands to JSON");
   const commandPayload = registrableCommands.map((c) => c.data.toJSON());
 
+  console.log("[boot] startAutoBackupScheduler");
   startAutoBackupScheduler();
+  console.log("[boot] getCommandMap");
   const commandMap = getCommandMap();
 
   // ────────────────────────────────────────────────────────────────────
@@ -88,6 +108,33 @@ export async function startDiscordBot(): Promise<void> {
     recordGatewayConnect();
     setCachedBotName(readyClient.user.username);
     logger.info({ tag: readyClient.user.tag }, "Discord bot ready");
+
+    // ── Update Global Application Description ─────────────────────────────
+    try {
+      const globalDesc = "Zenith Bot - The ultimate high-performance Discord management, moderation, music, and AI operations system.\n\nEquipped with advanced Anti-Nuke security, 24/7 High-Fidelity Music streaming, AutoMod, and AI Admin capabilities.\n\n🔗 Support Server: https://discord.gg/gFgAfpSYdp\n👑 Made by demonXtejas";
+      await readyClient.application.edit({ description: globalDesc });
+    } catch (err) {
+      logger.warn({ err }, "Could not update bot application description");
+    }
+
+    // ── Persistent Bot Status / Mode Restore ─────────────────────────────
+    try {
+      const { getBotStatusMode, updateOriginalAvatarUrl } = await import("./storage/botStatusState");
+      const mode = await getBotStatusMode();
+      if (mode !== "normal") {
+        logger.info({ mode }, "Restoring locked bot status state from storage...");
+        const { executeBotStatusUpdate } = await import("./commands/botstatus");
+        await executeBotStatusUpdate(readyClient, mode);
+      } else {
+        // In normal mode, always sync current clean avatar as baseline
+        const currentUrl = readyClient.user.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+        if (currentUrl) {
+          await updateOriginalAvatarUrl(currentUrl);
+        }
+      }
+    } catch (err) {
+      logger.error({ err }, "Failed to load/restore persistent bot status on startup");
+    }
 
     // Monitor WebSocket Heartbeat Ping
     setInterval(() => {
@@ -111,12 +158,30 @@ export async function startDiscordBot(): Promise<void> {
     // Re-apply every 15 minutes to guarantee status persistence
     setInterval(setPermanentActivity, 15 * 60 * 1000);
 
+    // Ensure Zenith Bot nickname & per-guild slash commands are applied across all active servers
+    for (const [_, g] of readyClient.guilds.cache) {
+      g.members.fetchMe().then((me) => {
+        if (me) me.setNickname("Zenith Bot").catch(() => {});
+      }).catch(() => {});
+      registerGuildCommands(readyClient, g.id).catch(() => {});
+    }
+
     // ── Auto-restore 24/7 Voice Sessions across all servers ──────────────
     try {
       const { init247Sessions } = await import("./music/musicManager");
       await init247Sessions(readyClient);
     } catch (err) {
       logger.warn({ err }, "Could not initialize 24/7 music sessions");
+    }
+
+    // ── Bulk Upload Emojis to God's Eye server ──────────────────────────
+    try {
+      const { uploadAllEmojisToGodsEye } = await import("./utils/tempEmojiUpload");
+      uploadAllEmojisToGodsEye(readyClient).catch((err) => {
+        logger.warn({ err }, "Background bulk emoji upload error");
+      });
+    } catch (err) {
+      logger.warn({ err }, "Could not trigger bulk emoji upload");
     }
 
     // ── Synchronize custom emojis with Relosta Bot Dev Server ───────────
@@ -187,23 +252,44 @@ export async function startDiscordBot(): Promise<void> {
       }
     }, 60_000);
 
-    const guildIds = [...readyClient.guilds.cache.keys()];
-    let guildOk = 0;
-    let guildFail = 0;
-    for (const guildId of guildIds) {
+    // ── Non-blocking background registration of Global Slash Commands & Guild Commands ──
+    (async () => {
       try {
-        await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: commandPayload });
-        guildOk++;
+        await rest.put(Routes.applicationCommands(clientId), { body: commandPayload });
+        logger.info({ commandCount: registrableCommands.length }, "Global application commands registered (Supports Commands badge enabled)");
       } catch (err) {
-        guildFail++;
-        logger.warn({ err, guildId }, "Failed to register guild commands");
+        logger.warn({ err }, "Could not register global application commands");
       }
-      await new Promise((r) => setTimeout(r, 150));
-    }
-    logger.info(
-      { guildOk, guildFail, total: guildIds.length, commandCount: registrableCommands.length },
-      "Guild-specific slash commands registered",
-    );
+
+      try {
+        const { syncNativeAutoModRules } = await import("./utils/autoModNative");
+        syncNativeAutoModRules(readyClient).catch((err) => {
+          logger.warn({ err }, "Background native AutoMod sync error");
+        });
+      } catch (err) {
+        logger.warn({ err }, "Could not trigger native AutoMod sync");
+      }
+
+      const guildIds = [...readyClient.guilds.cache.keys()];
+      let guildOk = 0;
+      let guildFail = 0;
+      for (const guildId of guildIds) {
+        try {
+          await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: commandPayload });
+          guildOk++;
+        } catch (err) {
+          guildFail++;
+          logger.warn({ err, guildId }, "Failed to register guild commands");
+        }
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      logger.info(
+        { guildOk, guildFail, total: guildIds.length, commandCount: registrableCommands.length },
+        "Guild-specific slash commands registered",
+      );
+    })().catch((err) => {
+      logger.error({ err }, "Error in background command registration queue");
+    });
 
     // Automatically notify users close to 9999 days (9997-9999) of their Lifetime upgrade
     // and deliver the executive command directives to all Bot Owners and Staff
@@ -217,19 +303,56 @@ export async function startDiscordBot(): Promise<void> {
     }, 5000);
   });
 
-  client.on(Events.ShardDisconnect, (event, shardId) => {
+  client.on(Events.ShardDisconnect, async (event, shardId) => {
     recordGatewayDisconnect(`Shard ${shardId} disconnected: ${event.reason || "Close Code " + event.code}`);
-    logger.warn({ event, shardId }, "Discord Gateway Shard Disconnected");
+    logger.warn({ event, shardId }, "Discord Gateway Shard Disconnected — ensuring all voice channels are cleanly vacated");
+    try {
+      const { disconnectAllVoiceChannels } = await import("./music/musicManager");
+      await disconnectAllVoiceChannels(client);
+    } catch {}
   });
+
+  const handleProcessShutdown = async (signal: string) => {
+    logger.info({ signal }, "Shutting down bot process — vacating all voice channels");
+    try {
+      const { disconnectAllVoiceChannels } = await import("./music/musicManager");
+      await disconnectAllVoiceChannels(client);
+    } catch {}
+    try {
+      client.destroy();
+    } catch {}
+  };
+
+  process.once("SIGINT", () => handleProcessShutdown("SIGINT"));
+  process.once("SIGTERM", () => handleProcessShutdown("SIGTERM"));
+  process.once("beforeExit", () => handleProcessShutdown("beforeExit"));
 
   client.on(Events.ShardReconnecting, (shardId) => {
     recordGatewayReconnect();
     logger.info({ shardId }, "Discord Gateway Shard Reconnecting");
   });
 
-  client.on(Events.Invalidated, () => {
+  client.on(Events.Error, (err) => {
+    logger.error({ err }, "Discord Client WebSocket Error encountered");
+  });
+
+  client.on(Events.Invalidated, async () => {
     recordInvalidSession();
-    logger.error("Discord Gateway Session Invalidated — Potential Token Collision from another host");
+    logger.error("Discord Gateway Session Invalidated — Attempting automatic reconnect in 5s...");
+    try {
+      client.destroy();
+      setTimeout(async () => {
+        try {
+          logger.info("Re-authenticating Discord Bot with Gateway...");
+          await client.login(token);
+          logger.info("Bot successfully re-connected to Discord Gateway!");
+        } catch (err) {
+          logger.error({ err }, "Auto-reconnect login attempt failed");
+        }
+      }, 5000);
+    } catch (err) {
+      logger.error({ err }, "Error during auto-reconnect cleanup");
+    }
   });
 
   client.on(Events.GuildCreate, async (guild) => {
@@ -243,6 +366,7 @@ export async function startDiscordBot(): Promise<void> {
       cancelGuildDeletion(guild.id).catch(() => {});
       await takeBackup(guild, "join");
       ensureJailRole(guild).catch(() => {});
+      guild.members.fetchMe().then((me) => { if (me) me.setNickname("Zenith Bot").catch(() => {}); }).catch(() => {});
       import("./commands/maintenance").then((m) => m.autoSetupMaintenanceOnJoin(guild)).catch(() => {});
       await registerGuildCommands(client, guild.id).catch(() => {});
       const guildNum = await incrementGuildCount();
@@ -259,8 +383,8 @@ export async function startDiscordBot(): Promise<void> {
         const configCmd = cmds.find((c) => c.name === "config");
         if (configCmd) configMention = `</config:${configCmd.id}>`;
       } catch {}
-      const serverMsg = `${CE.star.str} Thank you for adding **Relosta Bot** to **${guild.name}**!\n${CE.success.str} All commands and features are **100% active and ready to use**.\n◽ Use \`/setup\` or \`.wizard\` to configure role hierarchy, logging channels, or anti-nuke protection.\n◽ Guild \`#${guildNum}\``;
-      const dmMsg = `${CE.star.str} Thank you for adding **Relosta Bot** to **${guild.name}**!\n${CE.success.str} All commands and features are **100% active and ready to use**.\n◽ Use \`/setup\` or \`.wizard\` in your server to customize roles, logging, and security.\n◽ Guild \`#${guildNum}\``;
+      const serverMsg = `${CE.star.str} Thank you for adding **Zenith Bot** to **${guild.name}**!\n${CE.success.str} All commands and features are **100% active and ready to use**.\n◽ Use \`/setup\` or \`.wizard\` to configure role hierarchy, logging channels, or anti-nuke protection.\n◽ Guild \`#${guildNum}\``;
+      const dmMsg = `${CE.star.str} Thank you for adding **Zenith Bot** to **${guild.name}**!\n${CE.success.str} All commands and features are **100% active and ready to use**.\n◽ Use \`/setup\` or \`.wizard\` in your server to customize roles, logging, and security.\n◽ Guild \`#${guildNum}\``;
       const fetchedChannels = await guild.channels.fetch().catch(() => null);
       const me = guild.members.me ?? await guild.members.fetchMe().catch(() => null);
       let sendTarget: GuildTextBasedChannel | null = guild.systemChannel;
@@ -314,12 +438,6 @@ export async function startDiscordBot(): Promise<void> {
     ) {
       const { handlePremiumInteraction } = await import("./commands/premium");
       await handlePremiumInteraction(interaction);
-      return;
-    }
-
-    if (interaction.isButton() && interaction.customId.startsWith("nuke:")) {
-      const { handleNukeButton } = await import("./commands/nuke");
-      await handleNukeButton(interaction);
       return;
     }
 
@@ -427,6 +545,13 @@ export async function startDiscordBot(): Promise<void> {
           if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({ content: "Something went wrong.", flags: 1 << 6 }).catch(() => {});
           }
+        }
+      } else if (interaction.customId.startsWith("bug_approve:") || interaction.customId.startsWith("bug_reject:")) {
+        const { handleBugReportButton } = await import("./handlers/bugReportHandler");
+        try {
+          await handleBugReportButton(interaction as ButtonInteraction);
+        } catch (err) {
+          logger.error({ err }, "Error handling bug report button interaction");
         }
       } else if (interaction.customId.startsWith("ticket:open:")) {
         // Format: ticket:open:{panelId}:{guildId}
@@ -857,6 +982,54 @@ export async function startDiscordBot(): Promise<void> {
 
     if (!interaction.isChatInputCommand()) return;
 
+    if (interaction.guildId && interaction.guild) {
+      const cfg = await getGuildConfig(interaction.guildId);
+      const allowedSetupCmds = new Set([
+        "setup", "wizard", "setupwizard", "botstatus", "botmaintenance", "botmaintainence",
+        "botdown", "botnormal", "eval", "ping", "help", "botinfo", "noprefix", "prefix",
+        "config", "automod", "antinuke", "whitelist", "premium", "owner", "admin",
+        "botwhitelist", "botstaff", "ticket", "music", "play"
+      ]);
+      const member = interaction.member as import("discord.js").GuildMember | null;
+      const isAdminOrManager = member?.permissions?.has(PermissionFlagsBits.Administrator) ||
+                               member?.permissions?.has(PermissionFlagsBits.ManageGuild);
+
+      if (!cfg.setupWizardCompleted && !allowedSetupCmds.has(interaction.commandName.toLowerCase()) && !isAdminOrManager) {
+        const { isPermanentOwner } = await import("./storage/premium");
+        if (!isPermanentOwner(interaction.user.id)) {
+          const { prettyEmbed, COLORS, resolveDynamicEmoji } = await import("./utils/embedStyle");
+          const warnEmoji = resolveDynamicEmoji(client, "sk_warn", "⚠️");
+          await interaction.reply({
+            embeds: [
+              prettyEmbed({
+                title: `${warnEmoji} Server Setup Recommended`,
+                description:
+                  `This server (**${interaction.guild.name}**) has not completed initial setup yet!\n\n` +
+                  `An administrator should run **\`/setup\`** or **\`.setup\`** to configure roles, channels, and security walls.\n\n` +
+                  `> **Quick Setup:** Run **\`/setup\`** now for 1-Click Auto Setup!`,
+                color: COLORS.warning,
+              }),
+            ],
+            flags: 1 << 6,
+          }).catch(() => {});
+          return;
+        }
+      }
+    }
+
+    const { checkBotStatusCommandAccess, checkSingleCommandAccess } = await import("./storage/botStatusState");
+    const access = await checkBotStatusCommandAccess(interaction.user.id);
+    if (!access.allowed) {
+      await interaction.reply({ embeds: [access.embed], flags: 1 << 6 }).catch(() => {});
+      return;
+    }
+
+    const cmdAccess = await checkSingleCommandAccess(interaction.commandName, interaction.user.id);
+    if (!cmdAccess.allowed) {
+      await interaction.reply({ embeds: [cmdAccess.embed], flags: 1 << 6 }).catch(() => {});
+      return;
+    }
+
     const command = commandMap.get(interaction.commandName);
     if (!command) {
       logger.warn({ commandName: interaction.commandName }, "Command not found");
@@ -1060,9 +1233,9 @@ export async function startDiscordBot(): Promise<void> {
       } catch (err) { logger.warn({ err }, "Automod error"); }
     }
 
-    // ── Forward incoming DMs to the MESSAGE_LOGS webhook ────────────
+    // ── Forward incoming DMs to the MESSAGE_LOGS webhook & process DM commands ──
     if (!message.guild) {
-      await logDmToWebhook({
+      logDmToWebhook({
         direction: "in",
         userId: message.author.id,
         username: message.author.username,
@@ -1071,6 +1244,12 @@ export async function startDiscordBot(): Promise<void> {
           ? [...message.attachments.values()].map((a) => a.url)
           : undefined,
       }).catch(() => {});
+
+      try {
+        await handlePrefixMessage(message);
+      } catch (err) {
+        logger.error({ err }, "Error handling DM prefix command");
+      }
       return;
     }
 
@@ -1161,6 +1340,20 @@ export async function startDiscordBot(): Promise<void> {
       logger.error({ err, guildId: member.guild.id, userId: member.id }, "Error handling anti-join");
     }
 
+    // Bot Staff / QA Tester Auto-Role in Testing Server
+    try {
+      if (member.guild.roles.cache.has("1553398642835071056")) {
+        const { isBotStaff } = await import("./storage/botStaff");
+        const isStaff = await isBotStaff(member.id);
+        if (isStaff && !member.roles.cache.has("1553398642835071056")) {
+          await member.roles.add("1553398642835071056", "Auto-granted Bot Staff & QA Tester role on join").catch(() => {});
+          logger.info({ userId: member.id, guildId: member.guild.id }, "Auto-granted tester role to bot staff member on join");
+        }
+      }
+    } catch (err) {
+      logger.warn({ err, userId: member.id }, "Error checking tester role on guild join");
+    }
+
     try {
       const { getGuildConfig: getCfg } = await import("./storage/config");
       const { getMemberRoles } = await import("./storage/memberRoles");
@@ -1247,6 +1440,52 @@ export async function startDiscordBot(): Promise<void> {
       safeDispatchMemberJoin(member);
     } catch (err) {
       logger.error({ err, guildId: member.guild.id, userId: member.id }, "Error handling automations on join");
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Bot joined new guild: register commands, set nickname, mark setup pending
+  // ────────────────────────────────────────────────────────────────────
+  client.on(Events.GuildCreate, async (guild) => {
+    try {
+      logger.info({ guildId: guild.id, name: guild.name }, "Bot joined new guild");
+      // Set Zenith Bot nickname
+      const me = guild.members.me ?? await guild.members.fetchMe().catch(() => null);
+      if (me) {
+        await me.setNickname("Zenith Bot").catch(() => {});
+      }
+      // Register commands
+      const { registerGuildCommands } = await import("./registry/registerGuildCommands");
+      await registerGuildCommands(client, guild.id).catch(() => {});
+
+      // Mark setup pending
+      const { updateGuildConfig } = await import("./storage/config");
+      await updateGuildConfig(guild.id, (cfg) => ({
+        ...cfg,
+        setupWizardCompleted: false,
+      }));
+
+      // Send welcome / setup prompt to default channel
+      const systemCh = guild.systemChannel ?? guild.channels.cache.find((c: any) => c.isTextBased() && c.permissionsFor(guild.members.me)?.has("SendMessages"));
+      if (systemCh && "send" in systemCh) {
+        const { prettyEmbed, COLORS, resolveDynamicEmoji, SUPPORT_SERVER_URL } = await import("./utils/embedStyle");
+        const botEmoji = resolveDynamicEmoji(client, "bots", "🤖");
+        await (systemCh as any).send({
+          embeds: [
+            prettyEmbed({
+              title: `${botEmoji} Zenith Bot Joined ${guild.name}!`,
+              description:
+                `Thank you for adding **Zenith Bot**!\n\n` +
+                `An administrator must run **\`.setup\`** or **\`/setup\`** to complete the initial server setup before commands can be used in this server.\n\n` +
+                `> **Features:** Anti-Nuke, 24/7 Music Streaming, AutoMod & AI Administration.\n` +
+                `> **Support Server:** [Join Official Support](${SUPPORT_SERVER_URL}) | **Made by demonXtejas**`,
+              color: COLORS.primary,
+            }),
+          ],
+        }).catch(() => {});
+      }
+    } catch (err) {
+      logger.error({ err, guildId: guild.id }, "Error handling GuildCreate event");
     }
   });
 
@@ -1440,6 +1679,10 @@ export async function startDiscordBot(): Promise<void> {
       const { getMusicPlayer } = await import("./music/musicManager");
       const musicPlayer = getMusicPlayer(guildId);
       if (musicPlayer && musicPlayer.voiceChannel) {
+        // Absolute test server VC permanency safeguard
+        const isTestServer = musicPlayer.voiceChannel.guild.roles.cache.has("1553398642835071056");
+        if (isTestServer) return;
+
         const botChannelId = musicPlayer.voiceChannel.id;
         if (oldState.channelId === botChannelId || newState.channelId === botChannelId) {
           const nonBotMembers = musicPlayer.voiceChannel.members.filter((m) => !m.user.bot).size;
@@ -1509,7 +1752,22 @@ export async function startDiscordBot(): Promise<void> {
     }
   });
 
-  await client.login(token);
+  try {
+    logger.info("Logging into Discord Gateway...");
+    await client.login(token);
+    logger.info("client.login() token authenticated successfully!");
+  } catch (err: any) {
+    isBotStartingOrStarted = false;
+    try { client.destroy(); } catch {}
+    (globalThis as any).__discordClient = null;
+    logger.error({ err: err?.message || String(err) }, "Discord bot login failed");
+    throw err;
+  }
+  } catch (outerErr: any) {
+    isBotStartingOrStarted = false;
+    (globalThis as any).__discordClient = null;
+    throw outerErr;
+  }
 }
 
 

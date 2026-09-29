@@ -164,36 +164,68 @@ async function writeSupabaseJson<T>(storeName: string, data: T): Promise<void> {
   }
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Timeout of ${timeoutMs}ms exceeded for ${label}`));
+    }, timeoutMs);
+
+    promise
+      .then((res) => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
 export async function loadPersistentJson<T>(
   storeName: string,
   filePath: string,
   fallback: T,
 ): Promise<T> {
+  console.log(`[persistentJson] loadPersistentJson for ${storeName} started`);
   const client = getSupabaseClient();
   if (!client) {
+    console.log(`[persistentJson] no Supabase client, falling back to local json for ${storeName}`);
     return readLocalJson(filePath, fallback);
   }
 
   try {
-    const { data, error } = await client
+    console.log(`[persistentJson] querying Supabase for ${storeName}`);
+    const supabasePromise = client
       .from("bot_json_store")
       .select("payload")
       .eq("store_name", storeName)
       .maybeSingle();
 
+    console.log(`[persistentJson] awaiting Supabase withTimeout for ${storeName}`);
+    const { data, error } = await withTimeout(supabasePromise, 3000, `load:${storeName}`);
+    console.log(`[persistentJson] completed Supabase query for ${storeName}`);
+
     if (error) throw error;
     if (data?.payload != null) {
+      console.log(`[persistentJson] found payload in Supabase for ${storeName}`);
       return data.payload as T;
     }
-  } catch (err) {
-    logger.warn({ err, storeName }, "Persistent JSON store read failed; falling back to local file");
+  } catch (err: any) {
+    console.log(`[persistentJson] Supabase load failed for ${storeName}: ${err.message || err}`);
+    logger.warn({ err: err.message || String(err), storeName }, "Persistent JSON store read failed; falling back to local file");
   }
 
+  console.log(`[persistentJson] reading local JSON fallback for ${storeName}`);
   const local = await readLocalJson(filePath, fallback);
 
   try {
-    await writeSupabaseJson(storeName, local);
+    console.log(`[persistentJson] attempting backfill to Supabase for ${storeName}`);
+    const writePromise = writeSupabaseJson(storeName, local);
+    await withTimeout(writePromise, 2000, `write:${storeName}`);
+    console.log(`[persistentJson] completed backfill to Supabase for ${storeName}`);
   } catch {
+    console.log(`[persistentJson] backfill failed or timed out for ${storeName}`);
     // Best-effort backfill only.
   }
 
@@ -213,9 +245,10 @@ export async function persistPersistentJson<T>(
   }
 
   try {
-    await writeSupabaseJson(storeName, data);
-  } catch (err) {
-    logger.warn({ err, storeName }, "Persistent JSON store write failed; local file saved");
+    const writePromise = writeSupabaseJson(storeName, data);
+    await withTimeout(writePromise, 2000, `write:${storeName}`);
+  } catch (err: any) {
+    logger.warn({ err: err.message || String(err), storeName }, "Persistent JSON store write failed; local file saved");
   }
 }
 

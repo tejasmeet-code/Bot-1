@@ -72,7 +72,7 @@ const command: SlashCommand = {
         ...(proof ? [{ label: "Proof", value: proof }] : []),
       ])}`,
       thumbnail: target.displayAvatarURL({ size: 256 }),
-      footer: "Relosta Bot",
+      footer: "Zenith Bot",
       timestamp: true,
     });
 
@@ -128,7 +128,7 @@ export async function handleBanRequestButton(i: ButtonInteraction): Promise<void
 
         const updated = EmbedBuilder.from(i.message.embeds[0])
           .setColor(COLORS.danger)
-          .setFooter({ text: `Accepted by ${i.user.tag} — Case #${caseEntry.case_number} • Relosta Bot` });
+          .setFooter({ text: `Accepted by ${i.user.tag} — Case #${caseEntry.case_number} • Zenith Bot` });
         await i.update({ embeds: [updated], components: [] });
 
         const requester = await i.client.users.fetch(requesterId).catch(() => null);
@@ -142,7 +142,7 @@ export async function handleBanRequestButton(i: ButtonInteraction): Promise<void
   } else if (action === "reject") {
     const updated = EmbedBuilder.from(i.message.embeds[0])
       .setColor(COLORS.neutral)
-      .setFooter({ text: `Rejected by ${i.user.tag} • Relosta Bot` });
+      .setFooter({ text: `Rejected by ${i.user.tag} • Zenith Bot` });
     await i.update({ embeds: [updated], components: [] });
 
     const requester = await i.client.users.fetch(requesterId).catch(() => null);

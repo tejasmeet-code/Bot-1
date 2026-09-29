@@ -78,7 +78,7 @@ async function applyAvatar(
       description: `The bot's avatar has been updated globally — it now appears everywhere.\n\n**Source:** ${label}`,
       color: COLORS.success,
       image: newAvatarUrl,
-      footer: "Relosta Bot • avatar changes apply to all servers",
+      footer: "Zenith Bot • avatar changes apply to all servers",
     })],
   });
 

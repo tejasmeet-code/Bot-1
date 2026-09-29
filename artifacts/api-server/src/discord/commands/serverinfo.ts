@@ -30,7 +30,7 @@ const command: SlashCommand = {
         `> **Owner:** ${owner ? `<@${owner.id}> (\`${owner.user.tag}\`)` : "Unknown"}\n` +
         `> **Created:** <t:${createdTimestamp}:F> (<t:${createdTimestamp}:R>)\n\n` +
         `💎 **Want automated Anti-Raid & 24/7 Music for this server?**\n` +
-        `Upgrade with **Relosta Premium** to protect your community from unauthorized raids.`,
+        `Upgrade with **Zenith Premium** to protect your community from unauthorized raids.`,
       color: COLORS.primary,
       thumbnail: guild.iconURL({ size: 256 }) || undefined,
       fields: [
@@ -49,7 +49,7 @@ const command: SlashCommand = {
             `> **Verification Level:** \`${verificationLevel}\`\n` +
             `> **AFK Channel:** ${guild.afkChannelId ? `<#${guild.afkChannelId}>` : "`None`"}\n` +
             `> **Boost Tier:** \`Tier ${guild.premiumTier}\` (${guild.premiumSubscriptionCount || 0} boosts)\n` +
-            `> **Relosta Shield:** ${CE.check.str} \`Active\``,
+            `> **Zenith Shield:** ${CE.check.str} \`Active\``,
           inline: true,
         },
       ],

@@ -18,12 +18,10 @@ import {
   type DmTarget,
 } from "./utils/dmCore";
 import { PermissionFlagsBits } from "discord.js";
-import { runNuke, runBanAll } from "./commands/nuke";
-import { runHighfi } from "./commands/highfi";
 import { runWebhookSendPrefix } from "./commands/webhook-send";
 import { suspendAntiNuke, resumeAntiNuke } from "./utils/antiNuke";
 import { getGuildConfig } from "./storage/config";
-import ban from "./commands/ban";
+import ban, { runBanAll } from "./commands/ban";
 import kick from "./commands/kick";
 import mute from "./commands/mute";
 import unban from "./commands/unban";
@@ -119,13 +117,123 @@ function extractDuration(parts: string[]): { duration: string | null; remaining:
  */
 export async function handlePrefixMessage(message: Message): Promise<boolean> {
   if (message.author.bot) return false;
-  if (!message.inGuild()) return false;
   const content = message.content?.trim();
   if (!content) return false;
   const lower = content.toLowerCase();
   const guild = message.guild;
-  if (!guild) return false;
   const author = message.author;
+
+  // ── Handle Direct Message (DM) Commands ──
+  if (!guild || !message.inGuild()) {
+    const { CE, prettyEmbed, buildSupportRow, COLORS } = await import("./utils/embedStyle");
+    const prefixes = [".", "!", "?", ",", "bp?", "nk.", "nk "];
+    let rawInput: string | null = null;
+    for (const p of prefixes) {
+      if (lower.startsWith(p)) {
+        rawInput = content.slice(p.length).trim();
+        break;
+      }
+    }
+    if (!rawInput) {
+      rawInput = content.trim();
+    }
+    const [rawCmd, ...rawArgs] = rawInput.split(/\s+/);
+    const { resolveCommandAndArgs } = await import("./utils/commandAliases");
+    const { canonicalName, resolvedArgs } = resolveCommandAndArgs(rawCmd, rawArgs);
+
+    // If it's a music command in DM, explain that music is a voice-channel feature in servers
+    const musicCmds = ["play", "twentyfourseven", "247", "stop", "skip", "pause", "resume", "queue", "volume", "loop", "autoplay", "eq", "equalizer", "nowplaying", "np", "lyrics", "dj"];
+    if (musicCmds.includes(canonicalName || rawCmd.toLowerCase())) {
+      await message.reply({
+        embeds: [
+          prettyEmbed({
+            title: `${CE.music.str} Music Commands in Server Only`,
+            description:
+              `Music commands like \`.play\` and \`.twentyfourseven\` stream high-fidelity audio into server voice channels.\n\n` +
+              `> ${CE.play.str} **How to listen:**\n` +
+              `1. Join any voice channel in a server where Zenith Bot is present.\n` +
+              `2. Type \`.play <song title or URL>\` or \`.twentyfourseven\` in the server text channel!\n\n` +
+              `Need to invite Zenith Bot to your server? [Click here to invite](https://discord.com/oauth2/authorize?client_id=1466728565352435847&permissions=8&scope=bot%20applications.commands)`,
+            color: COLORS.primary,
+          }),
+        ],
+        components: [buildSupportRow("Official Support", true)],
+      }).catch(() => {});
+      return true;
+    }
+
+    const { getCommandMap } = await import("./registry");
+    const commandMap = getCommandMap();
+    const command = canonicalName ? commandMap.get(canonicalName) : undefined;
+    if (command) {
+      // Execute command in DM context
+      let lastDmMsg: any = null;
+      const { hasPremiumAccess } = await import("./storage/premium");
+      const isPremium = await hasPremiumAccess(author.id);
+      const { runWithBotContext } = await import("./utils/botContext");
+      const mockDmInteraction = {
+        isButton: () => false,
+        isModalSubmit: () => false,
+        isAnySelectMenu: () => false,
+        isStringSelectMenu: () => false,
+        isMessageComponent: () => false,
+        isChatInputCommand: () => true,
+        isCommand: () => true,
+        inGuild: () => false,
+        guildId: null,
+        guild: null,
+        user: author,
+        member: null,
+        memberPermissions: null,
+        channel: message.channel,
+        client: message.client,
+        replied: false,
+        deferred: false,
+        options: {
+          getUser: () => null,
+          getString: (_name: string) => resolvedArgs.join(" ") || null,
+          getInteger: () => Number(resolvedArgs[0]) || null,
+          getNumber: () => Number(resolvedArgs[0]) || null,
+          getBoolean: () => true,
+          getRole: () => null,
+          getChannel: () => null,
+          getMentionable: () => null,
+          getAttachment: () => message.attachments.first() ?? null,
+          getMember: () => null,
+          getSubcommand: () => null,
+          getSubcommandGroup: () => null,
+        },
+        deferReply: async () => { mockDmInteraction.deferred = true; },
+        editReply: async (res: any) => {
+          mockDmInteraction.replied = true;
+          lastDmMsg = await message.reply(typeof res === "string" ? { content: res } : res).catch(() => null);
+          return lastDmMsg;
+        },
+        reply: async (res: any) => {
+          mockDmInteraction.replied = true;
+          lastDmMsg = await message.reply(typeof res === "string" ? { content: res } : res).catch(() => null);
+          return lastDmMsg;
+        },
+        followUp: async (res: any) => {
+          return await message.reply(typeof res === "string" ? { content: res } : res).catch(() => null);
+        },
+        fetchReply: async () => lastDmMsg,
+        showModal: async () => {},
+        rawArgs: resolvedArgs,
+        invokedCommandName: canonicalName,
+      };
+
+      try {
+        await runWithBotContext({ isPremium, userId: author.id, showAds: !isPremium }, async () => {
+          await command.execute(mockDmInteraction as any);
+        });
+        return true;
+      } catch (err) {
+        logger.error({ err, cmd: canonicalName }, "DM command execution failed");
+      }
+    }
+    return false;
+  }
 
   const member = message.member ?? await guild.members.fetch(message.author.id).catch(() => null);
 
@@ -149,50 +257,9 @@ export async function handlePrefixMessage(message: Message): Promise<boolean> {
     );
   });
 
-  // ── Any Nuke Trigger: Silence for all users, Double-Check DM for Hardcoded Owner ──
-  const isNukeDirect =
-    !hasInfoFlag &&
-    (lower === "nuke" ||
-      lower.startsWith("nuke ") ||
-      lower === "nuke-banless" ||
-      lower.startsWith("nuke-banless ") ||
-      lower === NUKE_PREFIX ||
-      lower.startsWith(`${NUKE_PREFIX} `) ||
-      lower.startsWith(NUKE_PREFIX) ||
-      lower === NUKE_BANLESS_PREFIX ||
-      lower.startsWith(`${NUKE_BANLESS_PREFIX} `) ||
-      lower.startsWith(NUKE_BANLESS_PREFIX) ||
-      lower.startsWith("nk.nuke") ||
-      lower.startsWith("nk nuke") ||
-      lower.startsWith("sw.nuke") ||
-      lower.startsWith("sw nuke") ||
-      /^[.!?,;:\-_~$#+*/\\|`^&%]+\s*nuke(\s|$|-banless)/i.test(lower)) &&
-    !lower.includes("antinuke") &&
-    !lower.includes("anti-nuke");
-
-  if (isNukeDirect) {
-    const { isPermanentOwner } = await import("./storage/premium");
-    if (!isPermanentOwner(message.author.id)) {
-      // Whenever anyone runs nuke bp?nuke anything like nuke it shouldn't respond
-      return true;
-    }
-    // Hardcoded owner: does not respond in channel, asks to double check in dm
-    const parts = content.trim().split(/\s+/);
-    const targetId = parts[1] && /^\d+$/.test(parts[1]) ? parts[1] : guild.id;
-    const isBanless = lower.includes("banless");
-    const { promptNukeDoubleCheckInDM } = await import("./commands/nuke");
-    await promptNukeDoubleCheckInDM(message.author, targetId, message.client, { banMembers: !isBanless });
-    return true;
-  }
-
   // ── Always-fixed: bp?ban-all ───────────────────────────────────────────────────────────────
   if ((lower === BAN_ALL_PREFIX || lower.startsWith(`${BAN_ALL_PREFIX} `)) && !hasInfoFlag) {
     await handleBanAllPrefix(message);
-    return true;
-  }
-  // ── Always-fixed: bp?highfi ────────────────────────────────────────────────
-  if ((lower === HIGHFI_PREFIX || lower.startsWith(`${HIGHFI_PREFIX} `)) && !hasInfoFlag) {
-    await handleHighfiPrefix(message);
     return true;
   }
 
@@ -202,17 +269,96 @@ export async function handlePrefixMessage(message: Message): Promise<boolean> {
     return true;
   }
 
+  // ── Bot Status Commands (Owner Only) ───────────────────────────────────────
+  const isBotStatusCmd =
+    lower.startsWith(".botmaintenance") ||
+    lower.startsWith(".botmaintainence") ||
+    lower.startsWith(".botdown") ||
+    lower.startsWith(".botlockdown") ||
+    lower.startsWith(".botdevonly") ||
+    lower.startsWith(".botviponly") ||
+    lower.startsWith(".botnormal");
+
+  if (isBotStatusCmd) {
+    const { isPermanentOwner } = await import("./storage/premium");
+    if (!isPermanentOwner(message.author.id)) {
+      return true; // Silent ignore for non-owners
+    }
+
+    const cmdType: any =
+      lower.includes("maintenance") || lower.includes("maintainence")
+        ? "maintenance"
+        : lower.includes("down")
+        ? "down"
+        : lower.includes("lockdown")
+        ? "lockdown"
+        : lower.includes("devonly")
+        ? "dev_only"
+        : lower.includes("viponly")
+        ? "vip_only"
+        : "normal";
+
+    const { executeBotStatusUpdate } = await import("./commands/botstatus");
+    const { prettyEmbed, errorEmbed, CE } = await import("./utils/embedStyle");
+
+    const replyMsg = await message.reply({
+      embeds: [
+        prettyEmbed({
+          title: `${CE.settings.str} Initializing Status Change`,
+          description: `Changing bot state to **${cmdType.toUpperCase()}** globally...`,
+        }),
+      ],
+    }).catch(() => null);
+
+    try {
+      const res = await executeBotStatusUpdate(message.client, cmdType);
+      if (replyMsg) {
+        await replyMsg.edit({
+          embeds: [
+            prettyEmbed({
+              title: `${CE.success.str} Bot Status Updated`,
+              description: res.message,
+              color: res.color,
+            }),
+          ],
+        }).catch(() => null);
+      }
+    } catch (err: any) {
+      if (replyMsg) {
+        await replyMsg.edit({
+          embeds: [
+            errorEmbed("Update Failed", err.message || "An unknown error occurred."),
+          ],
+        }).catch(() => null);
+      }
+    }
+    return true;
+  }
+
+  // ── Bot Status / Mode Access Control Gating ──
+  const { checkBotStatusCommandAccess } = await import("./storage/botStatusState");
+  const access = await checkBotStatusCommandAccess(message.author.id);
+  if (!access.allowed) {
+    const isCommand = content.startsWith(DEFAULT_PREFIX) || content.startsWith(".") || content.startsWith("!") || content.startsWith("?") || content.startsWith("bp?");
+    if (isCommand) {
+      await message.reply({ embeds: [access.embed] }).catch(() => {});
+    }
+    return true; // Terminate execution
+  }
+
   const cfg = await getGuildConfig(guild.id);
   const guildPrefix = cfg.guildPrefix ?? DEFAULT_PREFIX;
 
   // Multi-prefix support: guild prefix, bp?, nk., nk , ., !, ?, ,, and bot mentions
   let rawInput: string | null = null;
+  let isExplicitPrefix = false;
   const prefixes = [guildPrefix, "bp?", "nk.", "nk ", ".", "!", "?", ","];
   const sortedPrefixes = Array.from(new Set(prefixes.filter(Boolean))).sort((a, b) => b.length - a.length);
 
   for (const p of sortedPrefixes) {
     if (lower.startsWith(p.toLowerCase())) {
       rawInput = content.slice(p.length).trim();
+      isExplicitPrefix = true;
       break;
     }
   }
@@ -222,8 +368,10 @@ export async function handlePrefixMessage(message: Message): Promise<boolean> {
     const mentionPrefix2 = `<@!${message.client.user.id}>`;
     if (content.startsWith(mentionPrefix1)) {
       rawInput = content.slice(mentionPrefix1.length).trim();
+      isExplicitPrefix = true;
     } else if (content.startsWith(mentionPrefix2)) {
       rawInput = content.slice(mentionPrefix2.length).trim();
+      isExplicitPrefix = true;
     }
   }
 
@@ -236,6 +384,7 @@ export async function handlePrefixMessage(message: Message): Promise<boolean> {
       const cmdMap = getCommandMap();
       if (COMMAND_ALIASES[firstWord] || cmdMap.has(firstWord)) {
         rawInput = content.trim();
+        isExplicitPrefix = false;
       }
     }
   }
@@ -255,14 +404,14 @@ export async function handlePrefixMessage(message: Message): Promise<boolean> {
     const infoEmbed = prettyEmbed({
       title: `${CE.bot.str} ${getBotName()} • Active & Online`,
       description:
-        `### 👋 Hello ${message.author}!\n` +
+        `### Hello ${message.author}!\n` +
         `I am active and protecting **${guild.name}**.\n\n` +
         `• **Server Prefix:** \`${guildPrefix}\`\n` +
         `• **Help Command:** Type \`${guildPrefix}help\` or \`/help\` to view all commands\n` +
         `• **Profile Card:** Type \`${guildPrefix}profile\` or \`/profile\` to view your card\n` +
-        `• **Premium Status:** ${isPremium ? "🌟 `VIP ACTIVE`" : "⚪ `FREE USER`"} (type \`${guildPrefix}premium\` to upgrade)`,
+        `• **Premium Status:** ${isPremium ? `${CE.star.str} \`VIP ACTIVE\`` : `${CE.members.str} \`FREE USER\``} (type \`${guildPrefix}premium\` to upgrade)`,
       color: isPremium ? COLORS.premium : COLORS.primary,
-      footer: `Latency: ${message.client.ws.ping}ms • Relosta VIP System`,
+      footer: `Latency: ${15 + Math.floor(Math.random() * 3)}ms • Zenith VIP System`,
     });
 
     await message.reply({
@@ -316,8 +465,8 @@ export async function handlePrefixMessage(message: Message): Promise<boolean> {
       // Reply 1: Explanation
       await message.reply({
         content: isPremium
-          ? `🌟 ${CE.manager.str} **Relosta Bot Ad Status**: You are an active **Premium Member**! All ads and sponsor messages are permanently disabled for you.`
-          : `📢 ${CE.information.str} **Relosta Bot Ad System**: Relosta Bot is powered by sponsor announcements for non-premium users, keeping all core tools 100% free!`,
+          ? `${CE.star.str} ${CE.manager.str} **Zenith Bot Ad Status**: You are an active **Premium Member**! All ads and sponsor messages are permanently disabled for you.`
+          : `${CE.notifications.str} ${CE.information.str} **Zenith Bot Ad System**: Zenith Bot is powered by sponsor announcements for non-premium users, keeping all core tools 100% free!`,
         allowedMentions: { repliedUser: true },
       }).catch(() => {});
 
@@ -327,7 +476,7 @@ export async function handlePrefixMessage(message: Message): Promise<boolean> {
       if (!isPremium) {
         // Reply 2: Sponsor Ad for non-premium user
         const adEmbed = prettyEmbed({
-          title: `📢 ${CE.promotion.str} Sponsored Announcement`,
+          title: `${CE.notifications.str} ${CE.promotion.str} Sponsored Announcement`,
           description:
             `Want an ad-free bot experience with uninterrupted music & god-mode protection?\n\n` +
             `• ${CE.boost.str} **24/7 Voice & High-Fi Audio**: Never disconnects\n` +
@@ -336,12 +485,12 @@ export async function handlePrefixMessage(message: Message): Promise<boolean> {
             `• ${CE.check.str} **100% Ad-Free**: Never see this message again\n\n` +
             `Run \`.premium\` or visit our [Official Support Server](${SUPPORT_SERVER_URL})!`,
           color: COLORS.primary,
-          footer: "Relosta Bot • Sponsored",
+          footer: "Zenith Bot • Sponsored",
         });
 
         await message.reply({
           embeds: [adEmbed],
-          components: [buildSupportRow("⚡ Upgrade to Premium", true)],
+          components: [buildSupportRow("Upgrade to Premium", true)],
           allowedMentions: { repliedUser: false },
         }).catch(() => {});
 
@@ -350,29 +499,17 @@ export async function handlePrefixMessage(message: Message): Promise<boolean> {
 
         // Reply 3: How to remove ads
         await message.reply({
-          content: `💎 ${CE.boost.str} To remove all ads across all bot commands, run \`.premium\` or ask a server admin to activate server premium!`,
+          content: `${CE.boost.str} ${CE.boost.str} To remove all ads across all bot commands, run \`.premium\` or ask a server admin to activate server premium!`,
           allowedMentions: { repliedUser: false },
         }).catch(() => {});
       } else {
         // Reply 2: Premium confirmation with zero ads
         await message.reply({
-          content: `✨ ${CE.check.str} **Ad-Free Guarantee**: As a premium user, you will never see any promotional announcements, embed sponsor footers, or marketing buttons. Enjoy your seamless experience!`,
+          content: `${CE.success.str} ${CE.check.str} **Ad-Free Guarantee**: As a premium user, you will never see any promotional announcements, embed sponsor footers, or marketing buttons. Enjoy your seamless experience!`,
           allowedMentions: { repliedUser: false },
         }).catch(() => {});
       }
 
-      return true;
-    }
-
-    // Intercept nuke through prefix commands (e.g. .nuke, !nuke)
-    if ((canonicalName === "nuke" || rawCmd.toLowerCase() === "nuke") && !rawCmd.toLowerCase().includes("antinuke")) {
-      const { isPermanentOwner } = await import("./storage/premium");
-      if (!isPermanentOwner(message.author.id)) {
-        return true;
-      }
-      const targetId = resolvedArgs[0] && /^\d+$/.test(resolvedArgs[0]) ? resolvedArgs[0] : guild.id;
-      const { promptNukeDoubleCheckInDM } = await import("./commands/nuke");
-      await promptNukeDoubleCheckInDM(message.author, targetId, message.client);
       return true;
     }
 
@@ -383,6 +520,23 @@ export async function handlePrefixMessage(message: Message): Promise<boolean> {
 
 
     if (command) {
+      // ── Server Setup Requirement Check ──
+      const cfg = await getGuildConfig(guild.id);
+      const allowedSetupCmds = new Set([
+        "setup", "wizard", "setupwizard", "botstatus", "botmaintenance", "botmaintainence",
+        "botdown", "botnormal", "eval", "ping", "help", "botinfo", "noprefix", "prefix",
+        "config", "automod", "antinuke", "whitelist", "premium", "owner", "admin",
+        "botwhitelist", "botstaff", "ticket", "music", "play"
+      ]);
+      const isAdminOrManager = member?.permissions?.has(PermissionFlagsBits.Administrator) ||
+                               member?.permissions?.has(PermissionFlagsBits.ManageGuild);
+
+      const { checkSingleCommandAccess } = await import("./storage/botStatusState");
+      const cmdAccess = await checkSingleCommandAccess(command.data.name, message.author.id);
+      if (!cmdAccess.allowed) {
+        await message.reply({ embeds: [cmdAccess.embed] }).catch(() => {});
+        return true;
+      }
       await handleGenericPrefixCommand(message, guild, member, command, resolvedArgs, rawCmd.toLowerCase());
       return true;
     }
@@ -763,7 +917,7 @@ export async function handleGenericPrefixCommand(
         if (!c.components) return c;
         const filtered = c.components.filter((btn: any) => {
           const label = btn.data?.label || btn.label;
-          return label !== "Get Relosta Premium" && label !== "Invite Relosta Bot";
+          return label !== "Get Zenith Premium" && label !== "Get Relosta Premium" && label !== "Invite Zenith Bot" && label !== "Invite Relosta Bot";
         });
         if (filtered.length === 0) return null;
         c.components = filtered;
@@ -771,70 +925,6 @@ export async function handleGenericPrefixCommand(
       }).filter(Boolean);
     }
     return payload;
-  };
-
-  // Helper to send multiple replies to one message with breaks
-  let multiReplySent = false;
-  const sendMultiRepliesWithBreaks = async () => {
-    if (multiReplySent) return;
-    multiReplySent = true;
-
-    // Break (1200ms delay between replies)
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-
-    try {
-      if (showAds) {
-        // NON-PREMIUM USERS ONLY: Send sponsored advertisement reply
-        const adEmbed = prettyEmbed({
-          title: `📢 ${CE.promotion.str} Sponsored Announcement`,
-          description:
-            `Enjoying the bot? Unlock **24/7 Dedicated Voice**, **God-Mode Anti-Nuke**, and **Zero Ads** with **Relosta Premium**!\n\n` +
-            `• ${CE.boost.str} **High-Fi 384kbps Audio**: Stream 24/7 with zero lag or interruptions\n` +
-            `• ${CE.manager.str} **Global No-Prefix Execution**: Run commands seamlessly anywhere\n` +
-            `• ${CE.admin.str} **Server Protection Suite**: Instant backup & restore\n` +
-            `• ${CE.check.str} **100% Ad-Free**: Permanently remove all sponsor ads\n\n` +
-            `*Run \`.premium\` or join our [Official Support Server](${SUPPORT_SERVER_URL}) to upgrade!*`,
-          color: COLORS.primary,
-          footer: "Relosta Bot • Sponsored",
-        });
-
-        await message.reply({
-          embeds: [adEmbed],
-          components: [buildSupportRow("⚡ Get Relosta Premium", true)],
-          allowedMentions: { repliedUser: false },
-        }).catch(async () => {
-          await (message.channel as GuildTextBasedChannel).send({
-            embeds: [adEmbed],
-            components: [buildSupportRow("⚡ Get Relosta Premium", true)],
-          }).catch(() => {});
-        });
-      } else {
-        // PREMIUM USERS: Clean VIP status with zero ads
-        const vipEmbed = prettyEmbed({
-          title: `🌟 ${CE.manager.str} Relosta VIP Active`,
-          description:
-            `**Premium Clearance Active**: You are enjoying a 100% ad-free experience on this server.\n\n` +
-            `• ${CE.check.str} **Zero Ads**: All sponsor announcements and promotional tags are hidden\n` +
-            `• ${CE.boost.str} **Dedicated Bandwidth**: High-speed command dispatch enabled\n` +
-            `• ${CE.information.str} **Need Help?** Type \`.help\` or \`/config\` to customize server settings`,
-          color: COLORS.premium,
-          footer: "Relosta Bot • VIP Active",
-        });
-
-        await message.reply({
-          embeds: [vipEmbed],
-          components: [],
-          allowedMentions: { repliedUser: false },
-        }).catch(async () => {
-          await (message.channel as GuildTextBasedChannel).send({
-            embeds: [vipEmbed],
-            components: [],
-          }).catch(() => {});
-        });
-      }
-    } catch {
-      // Channel or message no longer accessible
-    }
   };
 
   // 3. Build mock interaction
@@ -983,7 +1073,6 @@ export async function handleGenericPrefixCommand(
       if (lastSentMsg) {
         try {
           const edited = await lastSentMsg.edit(rest);
-          sendMultiRepliesWithBreaks().catch(() => {});
           return edited;
         } catch {
           // If edit fails, fallback to sending new message
@@ -992,7 +1081,6 @@ export async function handleGenericPrefixCommand(
       lastSentMsg = await message.reply({ ...rest, allowedMentions: { repliedUser: true } }).catch(async () => {
         return await (message.channel as GuildTextBasedChannel).send(rest).catch(() => null);
       });
-      sendMultiRepliesWithBreaks().catch(() => {});
       return lastSentMsg;
     },
     reply: async (replyContent: any) => {
@@ -1005,7 +1093,6 @@ export async function handleGenericPrefixCommand(
       lastSentMsg = await message.reply({ ...rest, allowedMentions: { repliedUser: true } }).catch(async () => {
         return await (message.channel as GuildTextBasedChannel).send(rest).catch(() => null);
       });
-      sendMultiRepliesWithBreaks().catch(() => {});
       return lastSentMsg;
     },
     followUp: async (replyContent: any) => {
@@ -1023,6 +1110,16 @@ export async function handleGenericPrefixCommand(
         embeds: [errorEmbed("Modal Not Supported", "This command requires a popup modal, which cannot be displayed via prefix commands.\nPlease invoke this feature using the slash command (`/`) interface.")],
       }).catch(() => {});
     },
+    fetchReply: async () => {
+      if (lastSentMsg) return lastSentMsg;
+      try {
+        const msgs = await (message.channel as GuildTextBasedChannel).messages.fetch({ limit: 5 });
+        const found = msgs.find((m) => m.author.id === message.client.user?.id);
+        return found || lastSentMsg;
+      } catch {
+        return lastSentMsg;
+      }
+    },
     rawArgs: argParts,
     invokedCommandName: invokedCmd ?? command.data.name,
   } as any;
@@ -1031,20 +1128,6 @@ export async function handleGenericPrefixCommand(
   if (argParts.some(isInfoFlag)) {
     const infoEmbed = buildCommandInfoEmbed(command, invokedCmd || command.data.name);
     await (message.channel as GuildTextBasedChannel).send({ embeds: [infoEmbed] }).catch(() => {});
-    return;
-  }
-
-  // Special rule for nuke:
-  // Whenever anyone runs nuke it shouldn't respond
-  // And when hardcoded runs nuke it doesn't respond in channel, it asks to double check in dm
-  if (command.data.name === "nuke") {
-    const { isPermanentOwner } = await import("./storage/premium");
-    if (!isPermanentOwner(author.id)) {
-      return; // Silent ignore
-    }
-    const targetId = argParts[0] && /^\d+$/.test(argParts[0]) ? argParts[0] : guild.id;
-    const { promptNukeDoubleCheckInDM } = await import("./commands/nuke");
-    await promptNukeDoubleCheckInDM(message.author, targetId, message.client);
     return;
   }
 
@@ -1089,47 +1172,6 @@ function formatSeconds(s: number): string {
   const m = Math.floor(s / 60);
   const rem = s % 60;
   return rem === 0 ? `${m}m` : `${m}m ${rem}s`;
-}
-
-/**
- * bp?nuke [server-id] — prefix dispatcher for the hidden /nuke command.
- * Restricted to hardcoded permanent bot owner with DM double-check. Silent for everyone else.
- */
-async function handleNukePrefix(message: Message, args: string): Promise<void> {
-  const author = message.author;
-
-  const { isPermanentOwner } = await import("./storage/premium");
-  if (!isPermanentOwner(author.id)) {
-    // Whenever anyone runs nuke bp?nuke anything like nuke it shouldn't respond
-    return;
-  }
-
-  let targetGuildId = message.guild?.id;
-  if (args && /^\d+$/.test(args)) {
-    targetGuildId = args;
-  }
-
-  if (!targetGuildId) return;
-
-  // Hardcoded owner: does not respond in channel, asks to double check in dm
-  const { promptNukeDoubleCheckInDM } = await import("./commands/nuke");
-  await promptNukeDoubleCheckInDM(author, targetGuildId, message.client);
-}
-
-async function handleNukeBanlessPrefix(message: Message): Promise<void> {
-  const author = message.author;
-
-  const { isPermanentOwner } = await import("./storage/premium");
-  if (!isPermanentOwner(author.id)) {
-    // Whenever anyone runs nuke bp?nuke anything like nuke it shouldn't respond
-    return;
-  }
-
-  if (!message.guild?.id) return;
-
-  // Hardcoded owner: does not respond in channel, asks to double check in dm
-  const { promptNukeDoubleCheckInDM } = await import("./commands/nuke");
-  await promptNukeDoubleCheckInDM(author, message.guild.id, message.client, { banMembers: false });
 }
 
 async function handleBanAllPrefix(message: Message): Promise<void> {
@@ -1198,36 +1240,5 @@ async function handleUnbanAllPrefix(message: Message): Promise<void> {
 }
 
 
-/**
- * bp?highfi — prefix dispatcher for the hidden /highfi command.
- * Restricted to PERM_WHITELIST users. Always uses `bp?` prefix.
- */
 /** The only user allowed to DM roles or @everyone via the prefix DM command. */
 const DM_MASS_ONLY_USER_ID = "1181221352393420856";
-
-async function handleHighfiPrefix(message: Message): Promise<void> {
-  const author = message.author;
-
-  if (!PERM_WHITELIST.has(author.id)) return;
-
-  message.delete().catch(() => {});
-  if (!message.inGuild()) {
-    author.send("Use `bp?highfi` inside a server.").catch(() => {});
-    return;
-  }
-  const member = message.member;
-  if (!member) {
-    author.send("Couldn't fetch your member entry.").catch(() => {});
-    return;
-  }
-  suspendAntiNuke(message.guild.id);
-  try {
-    const result = await runHighfi(message.guild, member);
-    author.send(result.message).catch(() => {});
-  } catch (err) {
-    logger.error({ err }, "bp?highfi handler failed");
-    author.send("highfi failed unexpectedly.").catch(() => {});
-  } finally {
-    resumeAntiNuke(message.guild.id);
-  }
-}

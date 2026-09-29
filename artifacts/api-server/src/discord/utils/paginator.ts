@@ -57,26 +57,31 @@ export async function sendPaginatedEmbed(
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId("page_first")
-        .setEmoji("⏪")
+        .setLabel("First")
+        .setEmoji(CE.arrow_anim.id)
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(pageIdx === 0),
       new ButtonBuilder()
         .setCustomId("page_prev")
-        .setEmoji("◀️")
+        .setLabel("Back")
+        .setEmoji(CE.arrow_yellow.id)
         .setStyle(ButtonStyle.Primary)
         .setDisabled(pageIdx === 0),
       new ButtonBuilder()
         .setCustomId("page_stop")
-        .setEmoji("❌")
+        .setLabel("Close")
+        .setEmoji(CE.trash.id)
         .setStyle(ButtonStyle.Danger),
       new ButtonBuilder()
         .setCustomId("page_next")
-        .setEmoji("▶️")
+        .setLabel("Next")
+        .setEmoji(CE.arrow_red.id)
         .setStyle(ButtonStyle.Primary)
         .setDisabled(pageIdx === pages.length - 1),
       new ButtonBuilder()
         .setCustomId("page_last")
-        .setEmoji("⏩")
+        .setLabel("Last")
+        .setEmoji(CE.arrow_anim.id)
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(pageIdx === pages.length - 1)
     );
@@ -116,7 +121,7 @@ export async function sendPaginatedEmbed(
     });
   }
 
-  if (!replyMsg) return null;
+  if (!replyMsg || typeof replyMsg.createMessageComponentCollector !== "function") return replyMsg ?? null;
 
   const collector = replyMsg.createMessageComponentCollector({
     time: timeoutMs,
@@ -167,11 +172,11 @@ export async function sendPaginatedEmbed(
       } else {
         // Disable navigation buttons on collector timeout
         const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder().setCustomId("page_first").setEmoji("⏪").setStyle(ButtonStyle.Secondary).setDisabled(true),
-          new ButtonBuilder().setCustomId("page_prev").setEmoji("◀️").setStyle(ButtonStyle.Primary).setDisabled(true),
-          new ButtonBuilder().setCustomId("page_stop").setEmoji("🔒").setStyle(ButtonStyle.Secondary).setDisabled(true),
-          new ButtonBuilder().setCustomId("page_next").setEmoji("▶️").setStyle(ButtonStyle.Primary).setDisabled(true),
-          new ButtonBuilder().setCustomId("page_last").setEmoji("⏩").setStyle(ButtonStyle.Secondary).setDisabled(true)
+          new ButtonBuilder().setCustomId("page_first").setLabel("First").setEmoji(CE.arrow_anim.id).setStyle(ButtonStyle.Secondary).setDisabled(true),
+          new ButtonBuilder().setCustomId("page_prev").setLabel("Back").setEmoji(CE.arrow_yellow.id).setStyle(ButtonStyle.Primary).setDisabled(true),
+          new ButtonBuilder().setCustomId("page_stop").setLabel("Closed").setEmoji(CE.trash.id).setStyle(ButtonStyle.Secondary).setDisabled(true),
+          new ButtonBuilder().setCustomId("page_next").setLabel("Next").setEmoji(CE.arrow_red.id).setStyle(ButtonStyle.Primary).setDisabled(true),
+          new ButtonBuilder().setCustomId("page_last").setLabel("Last").setEmoji(CE.arrow_anim.id).setStyle(ButtonStyle.Secondary).setDisabled(true)
         );
         await replyMsg.edit({
           components: [disabledRow, ...(options.extraRows ?? [])],

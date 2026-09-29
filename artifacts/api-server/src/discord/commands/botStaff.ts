@@ -20,6 +20,8 @@ import {
   removeBotStaffRole,
   canManageBotStaff,
   BOT_STAFF_ROLES,
+  TEST_SERVER_STAFF_ROLE_ID,
+  getTestingServerInvite,
   type BotStaffRole,
 } from "../storage/botStaff";
 import { CE, COLORS } from "../utils/embedStyle";
@@ -54,8 +56,12 @@ function parseRoleToken(interaction: ChatInputCommandInteraction): BotStaffRole 
     if (lower === "owner") return "owner";
     if (lower === "coowner" || lower === "co_owner") return "co_owner";
     if (lower === "admin" || lower === "administrator") return "admin";
+    if (lower === "headtester" || lower === "head_tester" || lower === "htester") return "head_tester";
+    if (lower === "tester" || lower === "qa" || lower === "test") return "tester";
     if (lower === "mod" || lower === "moderator") return "mod";
     if (lower === "help" || lower === "helper" || lower === "support") return "help";
+    if (lower === "vip") return "vip";
+    if (lower === "homies" || lower === "homie") return "homies";
   }
   return null;
 }
@@ -67,14 +73,16 @@ export async function buildStaffPanelEmbed(): Promise<{ embed: EmbedBuilder; row
   const owners = staffList.filter((s) => s.role === "owner");
   const coOwners = staffList.filter((s) => s.role === "co_owner");
   const admins = staffList.filter((s) => s.role === "admin");
+  const headTesters = staffList.filter((s) => s.role === "head_tester");
+  const testers = staffList.filter((s) => s.role === "tester");
   const mods = staffList.filter((s) => s.role === "mod");
   const helpers = staffList.filter((s) => s.role === "help");
 
   const embed = new EmbedBuilder()
-    .setTitle(`${CE.owner.str} Official Bot Staff Control Panel`)
+    .setTitle(`${CE.owner.str} Official Bot Staff & Tester Control Panel`)
     .setColor(0xF1C40F)
     .setDescription(
-      `Welcome to the **Bot Staff Management Center**.\n` +
+      `Welcome to the **Bot Staff & QA Tester Management Center**.\n` +
       `*Authorized Access: Hardcoded Bot Owner (<@${PERMANENT_BOT_OWNER_ID}>)*\n\n` +
       `### ${CE.owner.str} Hardcoded Founder & Owner\n` +
       `• <@${PERMANENT_BOT_OWNER_ID}> (\`${PERMANENT_BOT_OWNER_ID}\`) — *Full Bot Authority & Lifetime Premium*\n\n` +
@@ -93,6 +101,16 @@ export async function buildStaffPanelEmbed(): Promise<{ embed: EmbedBuilder; row
         ? admins.map((s) => `• <@${s.userId}> (\`${s.userId}\`) — *Admin tools, user premium, elevated bypass*`).join("\n")
         : "*No appointed administrators*") +
       `\n\n` +
+      `### ${CE.owner.str} Head QA Testers (${headTesters.length})\n` +
+      (headTesters.length > 0
+        ? headTesters.map((s) => `• <@${s.userId}> (\`${s.userId}\`) — *Lifetime VIP & Testing Lead*`).join("\n")
+        : "*No appointed head testers*") +
+      `\n\n` +
+      `### ${CE.user.str} QA Testers (${testers.length})\n` +
+      (testers.length > 0
+        ? testers.map((s) => `• <@${s.userId}> (\`${s.userId}\`) — *1 Year VIP & Feature Testing*`).join("\n")
+        : "*No appointed testers*") +
+      `\n\n` +
       `### ${CE.moderation.str} Bot Moderators (${mods.length})\n` +
       (mods.length > 0
         ? mods.map((s) => `• <@${s.userId}> (\`${s.userId}\`) — *Global moderation, case logs, ticket tools*`).join("\n")
@@ -105,16 +123,16 @@ export async function buildStaffPanelEmbed(): Promise<{ embed: EmbedBuilder; row
       `\n\n` +
       `**Quick Management:**\n` +
       `• Use the **Appoint Staff** and **Remove Staff** buttons below\n` +
-      `• Or run: \`.botstaff set @user <owner|coowner|admin|mod|help>\`\n` +
+      `• Or run: \`.botstaff set @user <owner|coowner|admin|head_tester|tester|mod|help>\`\n` +
       `• Or run: \`.botstaff remove @user\``
     )
-    .setFooter({ text: "Relosta Bot Official Roster • Real-time Sync" })
+    .setFooter({ text: "Zenith Bot Official Roster • Real-time Sync" })
     .setTimestamp();
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId("btn:bsp:add")
-      .setLabel("Appoint Staff")
+      .setLabel("Appoint Staff / Tester")
       .setEmoji(CE.success.id)
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
@@ -156,7 +174,7 @@ export async function handleBotStaffButton(interaction: ButtonInteraction): Prom
   if (customId === "btn:bsp:add") {
     const modal = new ModalBuilder()
       .setCustomId("modal:bsp:add")
-      .setTitle("Appoint Bot Staff Member");
+      .setTitle("Appoint Bot Staff or QA Tester");
 
     const userInput = new TextInputBuilder()
       .setCustomId("bsp_add_user")
@@ -167,8 +185,8 @@ export async function handleBotStaffButton(interaction: ButtonInteraction): Prom
 
     const roleInput = new TextInputBuilder()
       .setCustomId("bsp_add_role")
-      .setLabel("Role: owner, co_owner, admin, mod, help")
-      .setPlaceholder("owner | co_owner | admin | mod | help")
+      .setLabel("Role: head_tester, tester, admin, mod, help")
+      .setPlaceholder("head_tester | tester | owner | co_owner | admin | mod | help")
       .setStyle(TextInputStyle.Short)
       .setRequired(true);
 
@@ -201,6 +219,30 @@ export async function handleBotStaffButton(interaction: ButtonInteraction): Prom
     return;
   }
 
+  if (customId === "btn:bsp:breakdown") {
+    const fields = Object.values(BOT_STAFF_ROLES).map((r) => ({
+      name: `${r.emojiStr} ${r.title} ${r.badge}`,
+      value: `${r.description}\n` + r.benefits.map((b) => `• ${b}`).join("\n"),
+      inline: false,
+    }));
+
+    const inviteUrl = await getTestingServerInvite(interaction.client);
+
+    const embed = new EmbedBuilder()
+      .setTitle(`${CE.admin.str} Official Bot Staff & Tester Role Privileges`)
+      .setColor(COLORS.primary)
+      .setDescription(
+        `Below is the complete hierarchy and unlocked benefits for official **Zenith Bot Staff & QA Testers**.\n\n` +
+        `• **Official Bot Testing Server:** [Click to Join Testing Server](${inviteUrl})\n` +
+        `• **Testing Role Auto-Granted:** <@&${TEST_SERVER_STAFF_ROLE_ID}> upon joining`
+      )
+      .addFields(fields)
+      .setFooter({ text: "Zenith Staff Operations • Authorized Roster" });
+
+    await interaction.reply({ embeds: [embed], flags: 1 << 6 });
+    return;
+  }
+
   if (customId === "btn:bsp:refresh") {
     const { embed, row } = await buildStaffPanelEmbed();
     await interaction.update({ embeds: [embed], components: [row] });
@@ -208,26 +250,7 @@ export async function handleBotStaffButton(interaction: ButtonInteraction): Prom
   }
 
   if (customId === "btn:bsp:dismiss") {
-    await interaction.message.delete().catch(() => {});
-    return;
-  }
-
-  if (customId === "btn:bsp:breakdown") {
-    const breakdownEmbed = new EmbedBuilder()
-      .setTitle(`${CE.information.str} Bot Staff Roles & Privileges Breakdown`)
-      .setColor(0x2B2D31)
-      .setDescription(
-        Object.values(BOT_STAFF_ROLES)
-          .map((r) => {
-            return `### ${r.emojiStr} **${r.title}** (${r.badge})\n` +
-              `*${r.description}*\n` +
-              r.benefits.map((b) => `• ${b}`).join("\n");
-          })
-          .join("\n\n")
-      )
-      .setFooter({ text: "Official Bot Staff Roles Specification" });
-
-    await interaction.reply({ embeds: [breakdownEmbed], flags: 1 << 6 });
+    await interaction.update({ components: [] });
     return;
   }
 }
@@ -236,7 +259,7 @@ export async function handleBotStaffModal(interaction: ModalSubmitInteraction): 
   const allowed = await canManageBotStaff(interaction.user.id, interaction.guild, interaction.client);
   if (!allowed) {
     await interaction.reply({
-      content: `${CE.failure.str} Access Denied: Only authorized bot staff and administrators can submit this modal.`,
+      content: `${CE.failure.str} Access Denied: Unauthorized action.`,
       flags: 1 << 6,
     });
     return;
@@ -261,30 +284,33 @@ export async function handleBotStaffModal(interaction: ModalSubmitInteraction): 
     if (lowerRole === "owner") resolvedRole = "owner";
     else if (lowerRole === "coowner" || lowerRole === "co_owner") resolvedRole = "co_owner";
     else if (lowerRole === "admin" || lowerRole === "administrator") resolvedRole = "admin";
+    else if (lowerRole === "headtester" || lowerRole === "head_tester" || lowerRole === "htester") resolvedRole = "head_tester";
+    else if (lowerRole === "tester" || lowerRole === "qa" || lowerRole === "test") resolvedRole = "tester";
     else if (lowerRole === "mod" || lowerRole === "moderator") resolvedRole = "mod";
     else if (lowerRole === "help" || lowerRole === "helper" || lowerRole === "support") resolvedRole = "help";
 
     if (!resolvedRole) {
       await interaction.reply({
-        content: `${CE.failure.str} Invalid role \`${rawRole}\`. Available roles: \`owner\`, \`co_owner\`, \`admin\`, \`mod\`, \`help\`.`,
+        content: `${CE.failure.str} Invalid role \`${rawRole}\`. Available roles: \`head_tester\`, \`tester\`, \`owner\`, \`co_owner\`, \`admin\`, \`mod\`, \`help\`.`,
         flags: 1 << 6,
       });
       return;
     }
 
-    await setBotStaffRole(targetUserId, resolvedRole, interaction.user.id, interaction.client);
+    const { dmSent } = await setBotStaffRole(targetUserId, resolvedRole, interaction.user.id, interaction.client);
     const meta = BOT_STAFF_ROLES[resolvedRole];
 
     const embed = new EmbedBuilder()
-      .setTitle(`${CE.success.str} Bot Staff Member Appointed`)
+      .setTitle(`${CE.success.str} Bot Staff / Tester Appointed Successfully`)
       .setColor(meta.color)
       .setDescription(
         `Successfully appointed <@${targetUserId}> (\`${targetUserId}\`) as **${meta.title}** ${meta.badge}!\n\n` +
-        `• **Role**: ${meta.name}\n` +
-        `• **Permissions**: Full role privileges active immediately\n` +
-        `• **Direct Message**: Official congratulatory DM sent to member.`
+        `• **Role**: \`${meta.name}\`\n` +
+        `• **Premium License**: ${resolvedRole === "head_tester" || resolvedRole === "owner" || resolvedRole === "co_owner" || resolvedRole === "admin" ? "🌟 `LIFETIME VIP ACCESS`" : resolvedRole === "tester" ? "⭐ `1 YEAR (365 DAYS) VIP ACCESS`" : "Staff Access"}\n` +
+        `• **Testing Server Role**: Automatically assigned role <@&${TEST_SERVER_STAFF_ROLE_ID}>\n` +
+        `• **Direct Message**: ${dmSent ? "Delivered successfully with permanent testing server invite" : "Could not reach user via DM (DMs closed)"}`
       )
-      .setFooter({ text: "Relosta Bot Staff Directory" })
+      .setFooter({ text: "Zenith Bot Staff Directory" })
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed], flags: 1 << 6 });
@@ -318,7 +344,7 @@ export async function handleBotStaffModal(interaction: ModalSubmitInteraction): 
           ? `Successfully removed <@${targetUserId}> (\`${targetUserId}\`) from the official bot staff roster.`
           : `<@${targetUserId}> was not found in the bot staff roster.`
       )
-      .setFooter({ text: "Relosta Bot Staff Directory" })
+      .setFooter({ text: "Zenith Bot Staff Directory" })
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed], flags: 1 << 6 });
@@ -336,12 +362,12 @@ export const botStaffCommand: SlashCommand = {
     .setName("botstaff")
     .setDescription("Bot Staff Management Panel (Hardcoded Owner Only)")
     .addSubcommand((sub) =>
-      sub.setName("panel").setDescription("Display the interactive Bot Staff Panel")
+      sub.setName("panel").setDescription("Display the interactive Bot Staff & Tester Panel")
     )
     .addSubcommand((sub) =>
       sub
         .setName("set")
-        .setDescription("Assign or update a bot staff member's role")
+        .setDescription("Assign or update a bot staff member or QA tester")
         .addUserOption((o) => o.setName("user").setDescription("User to assign").setRequired(true))
         .addStringOption((o) =>
           o
@@ -349,11 +375,15 @@ export const botStaffCommand: SlashCommand = {
             .setDescription("Role to assign")
             .setRequired(true)
             .addChoices(
+              { name: "Head Tester (Lifetime Premium & Lead QA)", value: "head_tester" },
+              { name: "Tester (1 Year Premium & Bug Testing)", value: "tester" },
               { name: "Owner (All premium & all commands)", value: "owner" },
               { name: "Co Owner (Same as owner)", value: "co_owner" },
               { name: "Admin (Administration clearance & user premium)", value: "admin" },
               { name: "Mod (Global moderation & ticket oversight)", value: "mod" },
               { name: "Help (Support & helper clearance)", value: "help" },
+              { name: "VIP (Special VIP Member Badge)", value: "vip" },
+              { name: "Homies (Community Friend & Homies Rank)", value: "homies" },
             )
         )
     )
@@ -364,7 +394,7 @@ export const botStaffCommand: SlashCommand = {
         .addUserOption((o) => o.setName("user").setDescription("User to remove").setRequired(true))
     )
     .addSubcommand((sub) =>
-      sub.setName("list").setDescription("List all currently appointed bot staff")
+      sub.setName("list").setDescription("List all currently appointed bot staff and QA testers")
     ),
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -428,7 +458,7 @@ export const botStaffCommand: SlashCommand = {
 
       if (!targetUser) {
         await interaction.reply({
-          content: `${CE.failure.str} Please specify a valid user to appoint. Example: \`.botstaff set @user owner\``,
+          content: `${CE.failure.str} Please specify a valid user to appoint. Example: \`.botstaff set @user tester\``,
           flags: 1 << 6,
         });
         return;
@@ -436,14 +466,14 @@ export const botStaffCommand: SlashCommand = {
 
       if (!role) {
         await interaction.reply({
-          content: `${CE.failure.str} Please specify a valid staff role: \`owner\`, \`co_owner\`, \`admin\`, \`mod\`, or \`help\`.`,
+          content: `${CE.failure.str} Please specify a valid staff role: \`head_tester\`, \`tester\`, \`owner\`, \`co_owner\`, \`admin\`, \`mod\`, or \`help\`.`,
           flags: 1 << 6,
         });
         return;
       }
 
       const meta = BOT_STAFF_ROLES[role];
-      const { member, dmSent } = await setBotStaffRole(
+      const { dmSent } = await setBotStaffRole(
         targetUser.id,
         role,
         interaction.user.id,
@@ -451,17 +481,16 @@ export const botStaffCommand: SlashCommand = {
       );
 
       const embed = new EmbedBuilder()
-        .setTitle(`${CE.success.str} Bot Staff Role Appointed`)
+        .setTitle(`${CE.success.str} Bot Staff / Tester Appointed Successfully`)
         .setColor(meta.color)
         .setDescription(
-          `Successfully appointed <@${targetUser.id}> (\`${targetUser.id}\`) as **${meta.title}**!\n\n` +
-          `**Role:** ${meta.emojiStr} \`${meta.name.toUpperCase()}\` (${meta.badge})\n` +
-          `**Appointed By:** <@${interaction.user.id}>\n` +
-          `**Direct Message:** ${dmSent ? `${CE.check.str} Notification DM sent with full benefits breakdown` : `${CE.warning.str} Could not send DM (user has DMs closed)`}\n\n` +
-          `### ${meta.emojiStr} Assigned Privileges:\n` +
-          meta.benefits.map((b) => `• ${b}`).join("\n")
+          `Successfully appointed <@${targetUser.id}> (\`${targetUser.id}\`) as **${meta.title}** ${meta.badge}!\n\n` +
+          `• **Role**: \`${meta.name}\`\n` +
+          `• **Premium Granted**: ${role === "head_tester" || role === "owner" || role === "co_owner" || role === "admin" ? "🌟 `LIFETIME VIP ACCESS`" : role === "tester" ? "⭐ `1 YEAR (365 DAYS) VIP ACCESS`" : "Staff Access"}\n` +
+          `• **Testing Server Role**: Assigned role <@&${TEST_SERVER_STAFF_ROLE_ID}>\n` +
+          `• **Direct Message**: ${dmSent ? "Delivered successfully with permanent testing server invite link" : "Could not reach user via DM (DMs closed)"}`
         )
-        .setFooter({ text: "Relosta Bot Staff Administration" })
+        .setFooter({ text: "Zenith Bot Staff Directory" })
         .setTimestamp();
 
       await interaction.reply({ embeds: [embed] });
@@ -489,22 +518,15 @@ export const botStaffCommand: SlashCommand = {
       }
 
       const removed = await removeBotStaffRole(targetUser.id);
-      if (!removed) {
-        await interaction.reply({
-          content: `${CE.failure.str} <@${targetUser.id}> is not currently in the bot staff roster.`,
-          flags: 1 << 6,
-        });
-        return;
-      }
-
       const embed = new EmbedBuilder()
-        .setTitle(`${CE.demotion.str} Bot Staff Role Removed`)
-        .setColor(0xED4245)
+        .setTitle(`${removed ? CE.success.str : CE.failure.str} Staff Member ${removed ? "Removed" : "Not Found"}`)
+        .setColor(removed ? 0xED4245 : 0x2B2D31)
         .setDescription(
-          `Successfully removed <@${targetUser.id}> (\`${targetUser.id}\`) from the official bot staff team.\n` +
-          `All associated staff clearances and privileges have been revoked.`
+          removed
+            ? `Successfully removed <@${targetUser.id}> (\`${targetUser.id}\`) from the official bot staff team.`
+            : `<@${targetUser.id}> was not found in the bot staff roster.`
         )
-        .setFooter({ text: "Relosta Bot Staff Administration" })
+        .setFooter({ text: "Zenith Bot Staff Directory" })
         .setTimestamp();
 
       await interaction.reply({ embeds: [embed] });
@@ -512,3 +534,5 @@ export const botStaffCommand: SlashCommand = {
     }
   },
 };
+
+export default botStaffCommand;

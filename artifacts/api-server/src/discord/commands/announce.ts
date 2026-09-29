@@ -139,7 +139,7 @@ const command: SlashCommand = {
             title,
             description: message,
             color,
-            footer: `Announced by ${postSubmit.user.tag} • Relosta Bot`,
+            footer: `Announced by ${postSubmit.user.tag} • Zenith Bot`,
           })],
         });
       } catch {
@@ -154,7 +154,7 @@ const command: SlashCommand = {
           { label: "Title",   value: title },
         ])}`,
         color: COLORS.success,
-        footer: "Relosta Bot",
+        footer: "Zenith Bot",
       })] });
       return;
     }
@@ -237,7 +237,7 @@ const command: SlashCommand = {
           { label: "ID",       value: `\`${entry.id}\`` },
         ])}`,
         color: COLORS.info,
-        footer: "Use /announce cancel to remove it • Relosta Bot",
+        footer: "Use /announce cancel to remove it • Zenith Bot",
       })] });
       return;
     }
@@ -262,7 +262,7 @@ const command: SlashCommand = {
         title: `Scheduled Announcements — ${all.length}`,
         description: lines.join("\n\n"),
         color: COLORS.info,
-        footer: "Use /announce cancel <id> to remove one • Relosta Bot",
+        footer: "Use /announce cancel <id> to remove one • Zenith Bot",
       })] });
       return;
     }
@@ -282,7 +282,7 @@ const command: SlashCommand = {
         title: "Announcement cancelled",
         description: `${CE.success.str} Scheduled announcement \`${id}\` has been removed.`,
         color: COLORS.success,
-        footer: "Relosta Bot",
+        footer: "Zenith Bot",
       })] });
     }
   },

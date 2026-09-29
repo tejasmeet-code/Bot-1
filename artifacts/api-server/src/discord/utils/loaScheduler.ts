@@ -53,7 +53,7 @@ async function tick(client: Client): Promise<void> {
                 { label: "Status",      value: "Automatically marked as ended — your return date has passed" },
               ])}\n\nIf you need more time please submit a new \`/loa request\`.`,
               color: COLORS.warning,
-              footer: "Relosta Bot",
+              footer: "Zenith Bot",
             })],
           })
         ).catch(() => {});
@@ -73,7 +73,7 @@ async function tick(client: Client): Promise<void> {
                   { label: "Note",         value: "Return date passed without manual `/loa end`" },
                 ]),
                 color: COLORS.warning,
-                footer: "Relosta Bot",
+                footer: "Zenith Bot",
               })],
             }).catch(() => {});
           }
@@ -95,7 +95,7 @@ async function tick(client: Client): Promise<void> {
                 { label: "Time left",   value: `~${hoursLeft}h` },
               ])}\n\nUse \`/loa end\` when you're back, or submit a new \`/loa request\` if you need more time.`,
               color: COLORS.warning,
-              footer: "Relosta Bot",
+              footer: "Zenith Bot",
             })],
           })
         ).catch(() => {});

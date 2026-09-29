@@ -84,7 +84,7 @@ export async function sendPunishmentDM(
     description: `${emoji}\n\n${buildBullets(bulletItems)}${appealNote}`,
     thumbnail:   target.displayAvatarURL({ size: 256 }),
     color,
-    footer: opts.caseNumber ? `Case #${opts.caseNumber} • Relosta Bot` : "Relosta Bot",
+    footer: opts.caseNumber ? `Case #${opts.caseNumber} • Zenith Bot` : "Zenith Bot",
   });
 
   const row = new ActionRowBuilder<ButtonBuilder>();

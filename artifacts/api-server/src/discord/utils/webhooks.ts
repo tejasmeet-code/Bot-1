@@ -64,7 +64,7 @@ export async function sendWebhookList(
 }
 
 /**
- * Log a slash command execution as an embed to DISCORD_WEBHOOK_URL_1.
+ * Log a command execution (Slash, Prefix, or No-Prefix) as an embed to DISCORD_WEBHOOK_URL_1.
  */
 export async function logCommandExecution(opts: {
   commandName: string;
@@ -74,35 +74,56 @@ export async function logCommandExecution(opts: {
   guildName: string | null;
   channelId: string | null;
   channelName: string | null;
+  commandType?: "slash" | "prefix" | "noprefix";
+  args?: string;
 }): Promise<void> {
   const url = process.env.DISCORD_WEBHOOK_URL_1;
   if (!url) return;
 
+  const type = opts.commandType || "slash";
+  const prefixSymbol = type === "slash" ? "/" : type === "prefix" ? "." : "[No-Prefix] ";
+  const color = type === "slash" ? 0x5865F2 : type === "prefix" ? 0x57F287 : 0xF1C40F;
+
+  const fields = [
+    {
+      name: "User",
+      value: `<@${opts.userId}> \`${opts.username}\` (\`${opts.userId}\`)`,
+      inline: false,
+    },
+    {
+      name: "Server",
+      value: opts.guildName
+        ? `**${opts.guildName}** (\`${opts.guildId}\`)`
+        : "Direct Message",
+      inline: true,
+    },
+    {
+      name: "Channel",
+      value: opts.channelName
+        ? `**#${opts.channelName}** (\`${opts.channelId}\`)`
+        : "DM",
+      inline: true,
+    },
+    {
+      name: "Execution Type",
+      value: `\`${type.toUpperCase()}\``,
+      inline: true,
+    },
+  ];
+
+  if (opts.args && opts.args.trim()) {
+    fields.push({
+      name: "Arguments",
+      value: `\`\`\`\n${opts.args.slice(0, 500)}\n\`\`\``,
+      inline: false,
+    });
+  }
+
   const embed: WebhookEmbed = {
-    title: `/${opts.commandName}`,
-    color: 0x2b2d31, // Discord blurple
-    fields: [
-      {
-        name: "User",
-        value: `<@${opts.userId}> \`${opts.username}\` (\`${opts.userId}\`)`,
-        inline: false,
-      },
-      {
-        name: "Server",
-        value: opts.guildName
-          ? `**${opts.guildName}** (\`${opts.guildId}\`)`
-          : "Direct Message",
-        inline: true,
-      },
-      {
-        name: "Channel",
-        value: opts.channelName
-          ? `**#${opts.channelName}** (\`${opts.channelId}\`)`
-          : "DM",
-        inline: true,
-      },
-    ],
-    footer: { text: "Command Logger" },
+    title: `${prefixSymbol}${opts.commandName}`,
+    color,
+    fields,
+    footer: { text: `Zenith Audit Stream • ${type.toUpperCase()}` },
     timestamp: new Date().toISOString(),
   };
 

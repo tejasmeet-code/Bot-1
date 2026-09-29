@@ -1,8 +1,227 @@
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, type APIEmbedField, type ColorResolvable } from "discord.js";
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuOptionBuilder, type APIEmbedField, type ColorResolvable } from "discord.js";
 import { shouldShowAds, isCurrentContextPremium } from "./botContext";
 
 export const SUPPORT_SERVER_URL = "https://discord.gg/gFgAfpSYdp";
 export const BOT_INVITE_URL = "https://discord.com/oauth2/authorize?client_id=1466728565352435847&permissions=8&scope=bot%20applications.commands";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GLOBAL COMPONENT EMOJI NORMALIZATION:
+// Ensures that whether an emoji ID, string, or CustomEmojiEntry is passed to
+// ButtonBuilder.setEmoji or StringSelectMenuOptionBuilder.setEmoji, it is
+// converted into a valid Discord API emoji payload with both `id` and `name`.
+// If the custom emoji is not found in the client's cache, it falls back to a 
+// standard Unicode emoji to prevent Discord API "400 Bad Request: Unknown Emoji" crashes.
+// ─────────────────────────────────────────────────────────────────────────────
+const UNICODE_FALLBACKS: Record<string, string> = {
+  recycle: "🔄",
+  manager: "🛡️",
+  boost: "⚡",
+  staff: "👤",
+  locked: "🔒",
+  trash: "🗑️",
+  play: "▶️",
+  pause: "⏸️",
+  stop: "⏹️",
+  skip: "⏭️",
+  volumehigh: "🔊",
+  volumedown: "🔉",
+  volume: "🔊",
+  calendar: "📅",
+  information: "ℹ️",
+  link: "🔗",
+  success: "✅",
+  check: "✅",
+  check_yes: "✅",
+  check_no: "❌",
+  error: "❌",
+  failure: "❌",
+  warning: "⚠️",
+  verified: "✅",
+  star: "⭐",
+  star_rating: "⭐",
+  premium: "👑",
+  appeal: "🎫",
+  ticket: "🎫",
+  "8ball": "🎱",
+  slots: "🎰",
+  slotmachine: "🎰",
+  coinflip: "🪙",
+  kick: "👢",
+  ban: "🔨",
+  mute: "🔇",
+  unmute: "🔊",
+  icons_crown: "👑",
+  white_crown: "👑",
+  crown: "👑",
+  mod: "🛡️",
+  xd_head_mod: "🛡️",
+  tester: "🧪",
+  support: "🎧",
+  vip: "💎",
+  homies: "🤝",
+  nitro_1_months: "💎",
+  nitro_2_months: "💎",
+  nitro_3_months: "💎",
+  nitro_12_months: "👑",
+  turn_onoff_button: "⚡",
+  spotify: "🎧",
+  youtube: "▶️",
+  soundcloud: "☁️",
+  jiosaavn: "🎵",
+  applemusic: "🍎",
+  gaana: "🎶",
+  discord: "💬",
+  sk_connect: "🔗",
+  sk_antinuke: "🛡️",
+  sk_badge_premium: "💎",
+  sk_owner: "👑",
+  sk_staffmanager: "🛡️",
+  sk_automations: "⚙️",
+};
+
+/**
+ * Resolves an emoji dynamically from client cache, or returns a pristine Unicode fallback
+ * so no raw `:emoji_name:` or `<:name:id>` text ever appears in embeds or messages!
+ */
+export function resolveDynamicEmoji(client: any, emojiNameOrRaw: string, fallbackUnicode: string = "✨"): string {
+  if (!emojiNameOrRaw) return fallbackUnicode;
+  const clientObj = client || (globalThis as any).__discordClient;
+  
+  let searchName = "";
+  let searchId = "";
+
+  const rawStr = String(emojiNameOrRaw).trim();
+  const match = rawStr.match(/<(a?):([A-Za-z0-9_]+):([0-9]+)>/);
+  if (match) {
+    searchName = match[2];
+    searchId = match[3];
+  } else {
+    searchName = rawStr.toLowerCase();
+  }
+
+  if (clientObj?.emojis?.cache) {
+    if (searchId) {
+      const foundById = clientObj.emojis.cache.get(searchId);
+      if (foundById) return foundById.toString();
+    }
+    if (searchName) {
+      const foundByName = clientObj.emojis.cache.find((e: any) => e.name?.toLowerCase() === searchName.toLowerCase());
+      if (foundByName) return foundByName.toString();
+    }
+  }
+
+  // Check RAW_CE entry for searchName
+  const ceEntry = (RAW_CE as any)[searchName.toLowerCase()];
+  if (ceEntry && clientObj?.emojis?.cache) {
+    const found = clientObj.emojis.cache.get(ceEntry.id) || clientObj.emojis.cache.find((e: any) => e.name?.toLowerCase() === ceEntry.name?.toLowerCase());
+    if (found) return found.toString();
+  }
+
+  // Fallback to Unicode mapping to prevent raw Discord emoji markup text display
+  return UNICODE_FALLBACKS[searchName.toLowerCase()] || fallbackUnicode;
+}
+
+const origButtonSetEmoji = ButtonBuilder.prototype.setEmoji;
+ButtonBuilder.prototype.setEmoji = function (this: ButtonBuilder, emoji: any) {
+  if (!emoji) return origButtonSetEmoji.call(this, emoji);
+
+  let targetEmoji: { id?: string; name: string; animated?: boolean } | null = null;
+  const client = (globalThis as any).__discordClient;
+
+  if (typeof emoji === "object" && emoji.id && emoji.name) {
+    targetEmoji = { id: emoji.id, name: emoji.name, animated: Boolean(emoji.animated) };
+  } else if (typeof emoji === "string" && /^\d{17,20}$/.test(emoji)) {
+    const found = Object.values(CE).find((e) => e.id === emoji);
+    if (found) {
+      targetEmoji = { id: found.id, name: found.name, animated: Boolean(found.animated) };
+    } else {
+      targetEmoji = { id: emoji, name: "emoji" };
+    }
+  } else if (typeof emoji === "string") {
+    const match = emoji.match(/<(a?):([A-Za-z0-9_]+):([0-9]+)>/);
+    if (match) {
+      targetEmoji = { id: match[3], name: match[2], animated: match[1] === "a" };
+    }
+  }
+
+  if (targetEmoji && targetEmoji.id) {
+    if (client) {
+      let cached = client.emojis.cache.get(targetEmoji.id);
+      if (!cached && targetEmoji.name) {
+        cached = client.emojis.cache.find(
+          (e: any) => e.name?.toLowerCase() === targetEmoji!.name.toLowerCase()
+        );
+      }
+
+      if (cached) {
+        return origButtonSetEmoji.call(this, {
+          id: cached.id,
+          name: cached.name || targetEmoji.name,
+          animated: Boolean(cached.animated),
+        });
+      } else {
+        const fallback = UNICODE_FALLBACKS[targetEmoji.name.toLowerCase()];
+        if (fallback) {
+          return origButtonSetEmoji.call(this, fallback);
+        }
+        return this; // Skip setting custom emoji to prevent 400 Bad Request
+      }
+    }
+  }
+
+  return origButtonSetEmoji.call(this, emoji);
+};
+
+const origSelectOptionSetEmoji = StringSelectMenuOptionBuilder.prototype.setEmoji;
+StringSelectMenuOptionBuilder.prototype.setEmoji = function (this: StringSelectMenuOptionBuilder, emoji: any) {
+  if (!emoji) return origSelectOptionSetEmoji.call(this, emoji);
+
+  let targetEmoji: { id?: string; name: string; animated?: boolean } | null = null;
+  const client = (globalThis as any).__discordClient;
+
+  if (typeof emoji === "object" && emoji.id && emoji.name) {
+    targetEmoji = { id: emoji.id, name: emoji.name, animated: Boolean(emoji.animated) };
+  } else if (typeof emoji === "string" && /^\d{17,20}$/.test(emoji)) {
+    const found = Object.values(CE).find((e) => e.id === emoji);
+    if (found) {
+      targetEmoji = { id: found.id, name: found.name, animated: Boolean(found.animated) };
+    } else {
+      targetEmoji = { id: emoji, name: "emoji" };
+    }
+  } else if (typeof emoji === "string") {
+    const match = emoji.match(/<(a?):([A-Za-z0-9_]+):([0-9]+)>/);
+    if (match) {
+      targetEmoji = { id: match[3], name: match[2], animated: match[1] === "a" };
+    }
+  }
+
+  if (targetEmoji && targetEmoji.id) {
+    if (client) {
+      let cached = client.emojis.cache.get(targetEmoji.id);
+      if (!cached && targetEmoji.name) {
+        cached = client.emojis.cache.find(
+          (e: any) => e.name?.toLowerCase() === targetEmoji!.name.toLowerCase()
+        );
+      }
+
+      if (cached) {
+        return origSelectOptionSetEmoji.call(this, {
+          id: cached.id,
+          name: cached.name || targetEmoji.name,
+          animated: Boolean(cached.animated),
+        });
+      } else {
+        const fallback = UNICODE_FALLBACKS[targetEmoji.name.toLowerCase()];
+        if (fallback) {
+          return origSelectOptionSetEmoji.call(this, fallback);
+        }
+        return this; // Skip setting custom emoji to prevent 400 Bad Request
+      }
+    }
+  }
+
+  return origSelectOptionSetEmoji.call(this, emoji);
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GLOBAL EMBED SANITIZATION:
@@ -43,7 +262,7 @@ EmbedBuilder.prototype.toJSON = function (this: EmbedBuilder) {
   }
   const showAds = shouldShowAds();
   if (showAds) {
-    if (!json.footer?.text || json.footer.text === "Relosta High-Fidelity Audio" || json.footer.text === "Relosta Audio VIP Engine") {
+    if (!json.footer?.text || json.footer.text === "Zenith High-Fidelity Audio" || json.footer.text === "Zenith Audio VIP Engine") {
       json.footer = {
         text: getRandomMarketingFooter(json.footer?.text),
         icon_url: json.footer?.icon_url,
@@ -88,7 +307,7 @@ export const MARKETING_PITCHES = [
   "Crystal-clear 384kbps audio & 24/7 dedicated voice node • Join: discord.gg/gFgAfpSYdp",
   "Stop settling for basic bots. Transform your community with Premium • discord.gg/gFgAfpSYdp",
   "Enterprise Protection & Unmatched Reliability • Claim your VIP Pass: discord.gg/gFgAfpSYdp",
-  "Your community deserves the best. Upgrade to Relosta Premium today • discord.gg/gFgAfpSYdp",
+  "Your community deserves the best. Upgrade to Zenith Premium today • discord.gg/gFgAfpSYdp",
 ];
 
 export function getRandomMarketingFooter(fallback?: string): string {
@@ -108,7 +327,7 @@ export function getRandomMarketingFooter(fallback?: string): string {
     }
     return `${getBotName()} • VIP Engine`;
   }
-  if (fallback && (fallback.includes("discord.gg") || fallback.includes("Relosta Premium"))) {
+  if (fallback && (fallback.includes("discord.gg") || fallback.includes("Zenith Premium"))) {
     return fallback.replace(/<a?:[a-zA-Z0-9_]+:\d+>\s*/g, "").trim();
   }
   const pitch = MARKETING_PITCHES[Math.floor(Math.random() * MARKETING_PITCHES.length)];
@@ -135,7 +354,7 @@ export function buildSupportRow(customLabel?: string, forceNonPremium = false): 
 
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setLabel("Get Relosta Premium")
+      .setLabel("Get Zenith Premium")
       .setEmoji(CE.boost.id)
       .setStyle(ButtonStyle.Link)
       .setURL(SUPPORT_SERVER_URL),
@@ -145,14 +364,14 @@ export function buildSupportRow(customLabel?: string, forceNonPremium = false): 
       .setStyle(ButtonStyle.Link)
       .setURL(SUPPORT_SERVER_URL),
     new ButtonBuilder()
-      .setLabel("Invite Relosta Bot")
+      .setLabel("Invite Zenith Bot")
       .setEmoji(CE.promotion.id)
       .setStyle(ButtonStyle.Link)
       .setURL(BOT_INVITE_URL)
   );
 }
 
-let cachedBotName = "Bot";
+let cachedBotName = "Zenith";
 
 export function setCachedBotName(name: string | null | undefined): void {
   if (name && name.trim()) {
@@ -183,162 +402,200 @@ export interface CustomEmojiEntry {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CUSTOM EMOJI REGISTRY — All from the Relosta Bot emoji server & Dev server
+// CUSTOM EMOJI REGISTRY — All from the Zenith Bot emoji server & Dev server
 // Update IDs here and every command/embed updates automatically.
 // Static:   <:name:id>   |   Animated: <a:name:id>
 // ─────────────────────────────────────────────────────────────────────────────
-export const CE: Record<string, CustomEmojiEntry> = {
+const RAW_CE: Record<string, CustomEmojiEntry> = {
   // ── Status ───────────────────────────────────────────────────────────────
-  success:       { str: "<a:yellow_tick:1471104306286694451>", id: "1471104306286694451", name: "yellow_tick",    animated: true  },
+  success:       { str: "<a:SuccesWhite:1551170061404864546>", id: "1551170061404864546", name: "SuccesWhite",   animated: true  },
   check:         { str: "<a:SuccesWhite:1551170061404864546>", id: "1551170061404864546", name: "SuccesWhite",   animated: true  },
-  check_yes:     { str: "<a:yellow_tick:1471104306286694451>", id: "1471104306286694451", name: "yellow_tick",    animated: true  },
-  check_no:      { str: "<:874346wrong:1511387734483144764>", id: "1511387734483144764", name: "874346wrong",   animated: false },
+  check_yes:     { str: "<a:SuccesWhite:1551170061404864546>", id: "1551170061404864546", name: "SuccesWhite",   animated: true  },
+  check_no:      { str: "<:sk_autono:1551170184478724126>",    id: "1551170184478724126", name: "sk_autono",     animated: false },
   loading:       { str: "<a:white:1551170067058786309>",      id: "1551170067058786309", name: "white",         animated: true  },
-  error:         { str: "<:4561pinkerror:1511387678170677377>",id: "1511387678170677377", name: "4561pinkerror", animated: false },
-  failure:       { str: "<:874346wrong:1511387734483144764>", id: "1511387734483144764", name: "874346wrong",   animated: false },
-  failureorno:   { str: "<:874346wrong:1511387734483144764>", id: "1511387734483144764", name: "874346wrong",   animated: false },
-  warning:       { str: "<:red_info:1471148734833492065>",    id: "1471148734833492065", name: "red_info",      animated: false },
-  verified:      { str: "<:1178verified:1519270217912422441>", id: "1519270217912422441", name: "1178verified",  animated: false },
+  error:         { str: "<:sk_autono:1551170184478724126>",    id: "1551170184478724126", name: "sk_autono",     animated: false },
+  failure:       { str: "<:sk_autono:1551170184478724126>",    id: "1551170184478724126", name: "sk_autono",     animated: false },
+  failureorno:   { str: "<:sk_autono:1551170184478724126>",    id: "1551170184478724126", name: "sk_autono",     animated: false },
+  warning:       { str: "<:sk_warn:1551170088995389440>",      id: "1551170088995389440", name: "sk_warn",       animated: false },
+  verified:      { str: "<a:SuccesWhite:1551170061404864546>", id: "1551170061404864546", name: "SuccesWhite",   animated: true  },
   // ── People ───────────────────────────────────────────────────────────────
-  members:       { str: "<:user:1519271719137968238>",        id: "1519271719137968238", name: "user",          animated: false },
+  members:       { str: "<:botuser:1551170035773481070>",     id: "1551170035773481070", name: "botuser",       animated: false },
   user:          { str: "<:botuser:1551170035773481070>",     id: "1551170035773481070", name: "botuser",       animated: false },
-  staff:         { str: "<:8968pastelstaff:1471148829888872661>",id: "1471148829888872661", name: "8968pastelstaff",animated: false },
-  admin:         { str: "<:RedAdmin:1471461238620946584>",    id: "1471461238620946584", name: "RedAdmin",      animated: false },
-  manager:       { str: "<:crown_leads:1471104546582302929>", id: "1471104546582302929", name: "crown_leads",   animated: false },
-  owner:         { str: "<:Founders:1471148780530434333>",    id: "1471148780530434333", name: "Founders",      animated: false },
-  developer:     { str: "<:white_botdev:956255837091934338>", id: "956255837091934338", name: "white_botdev",  animated: false },
-  creators:      { str: "<:creators:1510521109441675334>",    id: "1510521109441675334", name: "creators",      animated: false },
+  staff:         { str: "<:sk_checkstaff:1551170200844763167>",id: "1551170200844763167", name: "sk_checkstaff", animated: false },
+  admin:         { str: "<:sk_staffmanager:1551170224164900895>",id: "1551170224164900895", name: "sk_staffmanager",animated: false },
+  manager:       { str: "<:sk_staffmanager:1551170224164900895>",id: "1551170224164900895", name: "sk_staffmanager",animated: false },
+  owner:         { str: "<:sk_owner:1551170126786199653>",    id: "1551170126786199653", name: "sk_owner",      animated: false },
+  developer:     { str: "<a:red_developer:1551170144574115930>",id: "1551170144574115930", name: "red_developer",  animated: true  },
+  creators:      { str: "<a:red_developer:1551170144574115930>",id: "1551170144574115930", name: "red_developer",  animated: true  },
   bot:           { str: "<:bots:1551170028517335140>",        id: "1551170028517335140", name: "bots",          animated: false },
-  white_bot:     { str: "<:white_bot:1521553655126425640>",   id: "1521553655126425640", name: "white_bot",     animated: false },
+  white_bot:     { str: "<:bots:1551170028517335140>",        id: "1551170028517335140", name: "bots",          animated: false },
   // ── Moderation & Systems ──────────────────────────────────────────────────
-  moderation:    { str: "<:RedAdmin:1471461238620946584>",    id: "1471461238620946584", name: "RedAdmin",      animated: false },
-  ban:           { str: "<:x_logMessage:1519269247908581498>",id: "1519269247908581498", name: "x_logMessage",  animated: false },
-  mute:          { str: "<:red_info:1471148734833492065>",    id: "1471148734833492065", name: "red_info",      animated: false },
-  mute_icon:     { str: "<:red_info:1471148734833492065>",    id: "1471148734833492065", name: "red_info",      animated: false },
-  nuke:          { str: "<a:FireRedandBlack:1471148448622444679>",id: "1471148448622444679", name: "FireRedandBlack",animated: true},
-  termination:   { str: "<:4561pinkerror:1511387678170677377>",id: "1511387678170677377", name: "4561pinkerror", animated: false },
-  demotion:      { str: "<:bottom:1551170032183025705>",      id: "1551170032183025705", name: "bottom",        animated: false },
-  promotion:     { str: "<a:red_point:1471148554717499558>",  id: "1471148554717499558", name: "red_point",     animated: true  },
+  moderation:    { str: "<:sk_staffmanager:1551170224164900895>",id: "1551170224164900895", name: "sk_staffmanager",animated: false },
+  ban:           { str: "<:sk_ban:1551170098042372179>",      id: "1551170098042372179", name: "sk_ban",        animated: false },
+  mute:          { str: "<:sk_mute:1551170104443015181>",     id: "1551170104443015181", name: "sk_mute",       animated: false },
+  mute_icon:     { str: "<:sk_mute:1551170104443015181>",     id: "1551170104443015181", name: "sk_mute",       animated: false },
+  nuke:          { str: "<:sk_antinuke:1551170217982496841>",  id: "1551170217982496841", name: "sk_antinuke",   animated: false },
+  termination:   { str: "<:sk_punishment:1551170233778540605>",id: "1551170233778540605", name: "sk_punishment", animated: false },
+  demotion:      { str: "<:sk_demote:1551170117097361498>",    id: "1551170117097361498", name: "sk_demote",     animated: false },
+  promotion:     { str: "<:sk_promote:1551170113271791771>",   id: "1551170113271791771", name: "sk_promote",    animated: false },
   // ── UI / Info & Communication ─────────────────────────────────────────────
   information:   { str: "<:botinfo:1551170025732313109>",     id: "1551170025732313109", name: "botinfo",       animated: false },
-  link:          { str: "<:ng_website:1471456690766348350>",   id: "1471456690766348350", name: "ng_website",    animated: false },
-  link_icon:     { str: "<:ng_website:1471456690766348350>",   id: "1471456690766348350", name: "ng_website",    animated: false },
-  notifications: { str: "<a:announcement:1471459879448477739>",id: "1471459879448477739", name: "announcement",animated: true },
-  announce:      { str: "<:serverannounce:1519271127854088282>",id: "1519271127854088282", name: "serverannounce",animated: false},
-  settings:      { str: "<:guidelines:1471461018956988568>",   id: "1471461018956988568", name: "guidelines",   animated: false },
-  automod:       { str: "<:guidelines:1471461018956988568>",   id: "1471461018956988568", name: "guidelines",   animated: false },
-  locked:        { str: "<:red_info:1471148734833492065>",    id: "1471148734833492065", name: "red_info",      animated: false },
+  link:          { str: "<:sk_connect:1551170269559951381>",   id: "1551170269559951381", name: "sk_connect",    animated: false },
+  link_icon:     { str: "<:sk_connect:1551170269559951381>",   id: "1551170269559951381", name: "sk_connect",    animated: false },
+  notifications: { str: "<:sk_broad:1551170272906874941>",    id: "1551170272906874941", name: "sk_broad",      animated: false },
+  announce:      { str: "<:sk_broad:1551170272906874941>",    id: "1551170272906874941", name: "sk_broad",      animated: false },
+  settings:      { str: "<:sk_automations:1551170176882835497>",id: "1551170176882835497", name: "sk_automations",animated: false },
+  automod:       { str: "<:sk_automod:1551170230678818816>",   id: "1551170230678818816", name: "sk_automod",    animated: false },
+  locked:        { str: "<:sk_lock:1551170070384742410>",     id: "1551170070384742410", name: "sk_lock",       animated: false },
   folder:        { str: "<:0white_pm:1551170015774900294>",   id: "1551170015774900294", name: "0white_pm",     animated: false },
   clipboard:     { str: "<:0white_pm:1551170015774900294>",   id: "1551170015774900294", name: "0white_pm",     animated: false },
-  delete:        { str: "<:x_logMessage:1519269247908581498>",id: "1519269247908581498", name: "x_logMessage",  animated: false },
-  trash:         { str: "<:x_logMessage:1519269247908581498>",id: "1519269247908581498", name: "x_logMessage",  animated: false },
-  ticket:        { str: "<a:Tickets_t:1471148888957124710>",  id: "1471148888957124710", name: "Tickets_t",    animated: true  },
+  delete:        { str: "<:sk_ban:1551170098042372179>",      id: "1551170098042372179", name: "sk_ban",        animated: false },
+  trash:         { str: "<:sk_ban:1551170098042372179>",      id: "1551170098042372179", name: "sk_ban",        animated: false },
+  ticket:        { str: "<:sk_appeal:1551170214220337162>",    id: "1551170214220337162", name: "sk_appeal",     animated: false },
   calendar:      { str: "<:botCalendarLight:1551170019226947625>",id: "1551170019226947625", name: "botCalendarLight",animated: false},
-  level:         { str: "<a:red_point:1471148554717499558>",  id: "1471148554717499558", name: "red_point",     animated: true  },
+  level:         { str: "<:sk_promote:1551170113271791771>",   id: "1551170113271791771", name: "sk_promote",    animated: false },
   chart:         { str: "<:botinfo:1551170025732313109>",     id: "1551170025732313109", name: "botinfo",       animated: false },
-  trophy:        { str: "<a:stars:1471148954581209223>",      id: "1471148954581209223", name: "stars",         animated: true  },
+  trophy:        { str: "<:sk_badge_owner:1551170151322746971>",id: "1551170151322746971", name: "sk_badge_owner", animated: false },
   dm_sent:       { str: "<:0white_pm:1551170015774900294>",   id: "1551170015774900294", name: "0white_pm",     animated: false },
   incoming:      { str: "<:0white_pm:1551170015774900294>",   id: "1551170015774900294", name: "0white_pm",     animated: false },
   outgoing:      { str: "<:0white_pm:1551170015774900294>",   id: "1551170015774900294", name: "0white_pm",     animated: false },
-  eightball:     { str: "<:botinfo:1551170025732313109>",     id: "1551170025732313109", name: "botinfo",       animated: false },
-  fortune:       { str: "<a:stars:1471148954581209223>",      id: "1471148954581209223", name: "stars",         animated: true  },
-  slots:         { str: "<:250885giveaway:1519270730540253204>",id: "1519270730540253204", name: "250885giveaway",animated: false},
-  slotmachine:   { str: "<:250885giveaway:1519270730540253204>",id: "1519270730540253204", name: "250885giveaway",animated: false},
-  bullseye:      { str: "<:red_info:1471148734833492065>",    id: "1471148734833492065", name: "red_info",      animated: false },
-  dead:          { str: "<:4561pinkerror:1511387678170677377>",id: "1511387678170677377", name: "4561pinkerror", animated: false },
-  roulette:      { str: "<a:FireRedandBlack:1471148448622444679>",id: "1471148448622444679", name: "FireRedandBlack",animated: true},
-  gun:           { str: "<a:FireRedandBlack:1471148448622444679>",id: "1471148448622444679", name: "FireRedandBlack",animated: true},
-  ship:          { str: "<a:Fire_Cyan:1466875400243384421>",  id: "1466875400243384421", name: "Fire_Cyan",     animated: true  },
-  ship_header:   { str: "<a:Fire_Cyan:1466875400243384421>",  id: "1466875400243384421", name: "Fire_Cyan",     animated: true  },
-  ship_filled:   { str: "<a:Fire_Cyan:1466875400243384421>",  id: "1466875400243384421", name: "Fire_Cyan",     animated: true  },
+  eightball:     { str: "<:sk_8ball:1551170130091315354>",     id: "1551170130091315354", name: "sk_8ball",       animated: false },
+  fortune:       { str: "<:sk_badge_premium:1551170158407188490>",id: "1551170158407188490", name: "sk_badge_premium",animated: false },
+  slots:         { str: "<:sk_slots:1551170136869179503>",    id: "1551170136869179503", name: "sk_slots",      animated: false },
+  slotmachine:   { str: "<:sk_slots:1551170136869179503>",    id: "1551170136869179503", name: "sk_slots",      animated: false },
+  bullseye:      { str: "<:sk_warn:1551170088995389440>",      id: "1551170088995389440", name: "sk_warn",       animated: false },
+  dead:          { str: "<:sk_autono:1551170184478724126>",    id: "1551170184478724126", name: "sk_autono",     animated: false },
+  roulette:      { str: "<:sk_coinflip:1551170133270335558>",  id: "1551170133270335558", name: "sk_coinflip",   animated: false },
+  gun:           { str: "<:sk_kick:1551170107299336336>",      id: "1551170107299336336", name: "sk_kick",       animated: false },
+  ship:          { str: "<:sk_autoheal:1551170188048207902>",  id: "1551170188048207902", name: "sk_autoheal",   animated: false },
+  ship_header:   { str: "<:sk_autoheal:1551170188048207902>",  id: "1551170188048207902", name: "sk_autoheal",   animated: false },
+  ship_filled:   { str: "<:sk_autoheal:1551170188048207902>",  id: "1551170188048207902", name: "sk_autoheal",   animated: false },
   ship_empty:    { str: "<:0white_pm:1551170015774900294>",   id: "1551170015774900294", name: "0white_pm",     animated: false },
-  soulmate:      { str: "<a:Fire_Cyan:1466875400243384421>",  id: "1466875400243384421", name: "Fire_Cyan",     animated: true  },
-  soulmates:     { str: "<a:Fire_Cyan:1466875400243384421>",  id: "1466875400243384421", name: "Fire_Cyan",     animated: true  },
-  soulmates_ring:{ str: "<a:PurpleStar:1471148510245294100>", id: "1471148510245294100", name: "PurpleStar",    animated: true  },
-  no_luck_face:  { str: "<:4561pinkerror:1511387678170677377>",id: "1511387678170677377", name: "4561pinkerror", animated: false },
-  rank1:         { str: "<a:stars:1471148954581209223>",      id: "1471148954581209223", name: "stars",         animated: true  },
-  rank2:         { str: "<a:red_point:1471148554717499558>",  id: "1471148554717499558", name: "red_point",     animated: true  },
-  rank3:         { str: "<:user:1519271719137968238>",        id: "1519271719137968238", name: "user",          animated: false },
+  soulmate:      { str: "<:sk_autoheal:1551170188048207902>",  id: "1551170188048207902", name: "sk_autoheal",   animated: false },
+  soulmates:     { str: "<:sk_autoheal:1551170188048207902>",  id: "1551170188048207902", name: "sk_autoheal",   animated: false },
+  soulmates_ring:{ str: "<:sk_autoheal:1551170188048207902>",  id: "1551170188048207902", name: "sk_autoheal",   animated: false },
+  no_luck_face:  { str: "<:sk_autono:1551170184478724126>",    id: "1551170184478724126", name: "sk_autono",     animated: false },
+  rank1:         { str: "<:sk_badge_owner:1551170151322746971>",id: "1551170151322746971", name: "sk_badge_owner", animated: false },
+  rank2:         { str: "<:sk_badge_premium:1551170158407188490>",id: "1551170158407188490", name: "sk_badge_premium",animated: false },
+  rank3:         { str: "<:botuser:1551170035773481070>",     id: "1551170035773481070", name: "botuser",       animated: false },
   // ── Shop & Premium ───────────────────────────────────────────────────────
   cash:          { str: "<:BotCompras:1551170021999255552>",  id: "1551170021999255552", name: "BotCompras",    animated: false },
   cashout:       { str: "<:BotCompras:1551170021999255552>",  id: "1551170021999255552", name: "BotCompras",    animated: false },
   ltc:           { str: "<:BotCompras:1551170021999255552>",  id: "1551170021999255552", name: "BotCompras",    animated: false },
   shoppingcart:  { str: "<:BotCompras:1551170021999255552>",  id: "1551170021999255552", name: "BotCompras",    animated: false },
   discount:      { str: "<:BotCompras:1551170021999255552>",  id: "1551170021999255552", name: "BotCompras",    animated: false },
-  limited:       { str: "<a:PurpleStar:1471148510245294100>", id: "1471148510245294100", name: "PurpleStar",    animated: true  },
-  star:          { str: "<a:stars:1471148954581209223>",      id: "1471148954581209223", name: "stars",         animated: true  },
-  star_rating:   { str: "<a:stars:1471148954581209223>",      id: "1471148954581209223", name: "stars",         animated: true  },
-  heart:         { str: "<a:Fire_Cyan:1466875400243384421>",  id: "1466875400243384421", name: "Fire_Cyan",     animated: true  },
+  limited:       { str: "<:sk_badge_premium:1551170158407188490>",id: "1551170158407188490", name: "sk_badge_premium",animated: false },
+  star:          { str: "<:sk_badge_premium:1551170158407188490>",id: "1551170158407188490", name: "sk_badge_premium",animated: false },
+  star_rating:   { str: "<:sk_badge_premium:1551170158407188490>",id: "1551170158407188490", name: "sk_badge_premium",animated: false },
+  heart:         { str: "<:sk_autoheal:1551170188048207902>",  id: "1551170188048207902", name: "sk_autoheal",   animated: false },
   chat:          { str: "<:0white_pm:1551170015774900294>",   id: "1551170015774900294", name: "0white_pm",     animated: false },
   // ── Games & Fun ──────────────────────────────────────────────────────────
-  giveaway:      { str: "<:250885giveaway:1519270730540253204>",id: "1519270730540253204", name: "250885giveaway",animated: false},
-  boost:         { str: "<a:boosts:1511698728820670645>",     id: "1511698728820670645", name: "boosts",        animated: true  },
-  fire:          { str: "<a:Fire_Cyan:1466875400243384421>",  id: "1466875400243384421", name: "Fire_Cyan",     animated: true  },
-  streak:        { str: "<a:Fire_Cyan:1466875400243384421>",  id: "1466875400243384421", name: "Fire_Cyan",     animated: true  },
-  arrow_red:     { str: "<:redarrow:1481966135917281430>",    id: "1481966135917281430", name: "redarrow",      animated: false },
-  arrow_yellow:  { str: "<:y_arrow:1519269086775873536>",     id: "1519269086775873536", name: "y_arrow",       animated: false },
-  arrow_anim:    { str: "<a:arrow_arrow:1511698578567860404>",id: "1511698578567860404", name: "arrow_arrow",  animated: true  },
+  giveaway:      { str: "<:sk_games:1551170140228816916>",    id: "1551170140228816916", name: "sk_games",      animated: false },
+  boost:         { str: "<:sk_badge_premium:1551170158407188490>",id: "1551170158407188490", name: "sk_badge_premium",animated: false },
+  fire:          { str: "<:sk_autoheal:1551170188048207902>",  id: "1551170188048207902", name: "sk_autoheal",   animated: false },
+  streak:        { str: "<:sk_autoheal:1551170188048207902>",  id: "1551170188048207902", name: "sk_autoheal",   animated: false },
+  arrow_red:     { str: "<a:playing:1551170052806541323>",    id: "1551170052806541323", name: "playing",       animated: true  },
+  arrow_yellow:  { str: "<a:playing:1551170052806541323>",    id: "1551170052806541323", name: "playing",       animated: true  },
+  arrow_anim:    { str: "<a:playing:1551170052806541323>",    id: "1551170052806541323", name: "playing",       animated: true  },
   // ── Music Player & Controls ──────────────────────────────────────────────
   music:         { str: "<a:music:1551170042346082397>",      id: "1551170042346082397", name: "music",         animated: true  },
   play:          { str: "<a:playing:1551170052806541323>",    id: "1551170052806541323", name: "playing",       animated: true  },
-  pause:         { str: "<:p_musicstop:1358407974690750524>", id: "1358407974690750524", name: "p_musicstop",  animated: false },
-  stop:          { str: "<:p_musicstop:1358407974690750524>", id: "1358407974690750524", name: "p_musicstop",  animated: false },
-  skip:          { str: "<a:arrow_arrow:1511698578567860404>",id: "1511698578567860404", name: "arrow_arrow",  animated: true  },
+  playing:       { str: "<a:playing:1551170052806541323>",    id: "1551170052806541323", name: "playing",       animated: true  },
+  pause:         { str: "<:001_music:1551170011899371642>",   id: "1551170011899371642", name: "001_music",     animated: false },
+  stop:          { str: "<:001_music:1551170011899371642>",   id: "1551170011899371642", name: "001_music",     animated: false },
+  skip:          { str: "<a:playing:1551170052806541323>",    id: "1551170052806541323", name: "playing",       animated: true  },
   music_bot:     { str: "<:001_music:1551170011899371642>",   id: "1551170011899371642", name: "001_music",     animated: false },
-  music_queue:   { str: "<:selectionmenu_music_white:1251537150999003187>",id: "1251537150999003187", name: "selectionmenu_music_white", animated: false },
-  white_musicnote:{ str: "<:white_musicnote:964953681730613258>",id: "964953681730613258", name: "white_musicnote", animated: false },
+  music_queue:   { str: "<:sk_playlist:1551170051280081036>",  id: "1551170051280081036", name: "sk_playlist",   animated: false },
+  white_musicnote:{ str: "<:001_music:1551170011899371642>",   id: "1551170011899371642", name: "001_music",     animated: false },
   // ── Social & Platforms ───────────────────────────────────────────────────
   discord:       { str: "<:Discord:1472116340939554900>",     id: "1472116340939554900", name: "Discord",       animated: false },
   youtube:       { str: "<:YOUTUBE:1514591262962090085>",     id: "1514591262962090085", name: "YOUTUBE",       animated: false },
+  spotify:       { str: "<:spotify:1514591262962090085>",     id: "1514591262962090085", name: "spotify",       animated: false },
+  soundcloud:    { str: "<:soundcloud:1514591262962090085>",  id: "1514591262962090085", name: "soundcloud",    animated: false },
+  jiosaavn:      { str: "<:jiosaavn:1514591262962090085>",    id: "1514591262962090085", name: "jiosaavn",      animated: false },
+  applemusic:    { str: "<:applemusic:1514591262962090085>",  id: "1514591262962090085", name: "applemusic",    animated: false },
+  gaana:         { str: "<:gaana:1514591262962090085>",       id: "1514591262962090085", name: "gaana",         animated: false },
   instagram:     { str: "<:Instagram:1471456550408159253>",  id: "1471456550408159253", name: "Instagram",     animated: false },
   google:        { str: "<:google:1514592158403923979>",      id: "1514592158403923979", name: "google",        animated: false },
   gmail:         { str: "<:gmail:1472115964395913247>",       id: "1472115964395913247", name: "gmail",         animated: false },
   india:         { str: "<:India:1514592784093417593>",       id: "1514592784093417593", name: "India",         animated: false },
-  partnered:     { str: "<:Partnered:1472116412033011762>",   id: "1472116412033011762", name: "Partnered",     animated: false },
+  partnered:     { str: "<:sk_connect:1551170269559951381>",   id: "1551170269559951381", name: "sk_connect",    animated: false },
   // ── Fallback UI ──────────────────────────────────────────────────────────
-  draw:          { str: "<:Partnered:1472116412033011762>",   id: "1472116412033011762", name: "Partnered",     animated: false },
+  draw:          { str: "<:sk_connect:1551170269559951381>",   id: "1551170269559951381", name: "sk_connect",    animated: false },
   clock:         { str: "<:botCalendarLight:1551170019226947625>",id: "1551170019226947625", name: "botCalendarLight",animated: false},
   media:         { str: "<:0white_pm:1551170015774900294>",   id: "1551170015774900294", name: "0white_pm",     animated: false },
-  prank:         { str: "<:AGzO_Loll:1511417840975089837>",   id: "1511417840975089837", name: "AGzO_Loll",     animated: false },
+  prank:         { str: "<:sk_games:1551170140228816916>",    id: "1551170140228816916", name: "sk_games",      animated: false },
   equalizer:     { str: "<a:music:1551170042346082397>",      id: "1551170042346082397", name: "music",         animated: true  },
-  radio:         { str: "<a:announcement:1471459879448477739>",id: "1471459879448477739", name: "announcement",animated: true },
-  loop_icon:     { str: "<a:Fire_Cyan:1466875400243384421>",  id: "1466875400243384421", name: "Fire_Cyan",     animated: true  },
-  volume_icon:   { str: "<a:red_point:1471148554717499558>",  id: "1471148554717499558", name: "red_point",     animated: true  },
-  upvote:        { str: "<a:yellow_tick:1471104306286694451>",id: "1471104306286694451", name: "yellow_tick",    animated: true  },
-  rope:          { str: "<:red_info:1471148734833492065>",    id: "1471148734833492065", name: "red_info",      animated: false },
+  radio:         { str: "<:sk_broad:1551170272906874941>",    id: "1551170272906874941", name: "sk_broad",      animated: false },
+  loop_icon:     { str: "<:sk_autoheal:1551170188048207902>",  id: "1551170188048207902", name: "sk_autoheal",   animated: false },
+  volume_icon:   { str: "<a:sk_volumehigh:1551170045617639535>",id: "1551170045617639535", name: "sk_volumehigh", animated: true  },
+  upvote:        { str: "<a:SuccesWhite:1551170061404864546>", id: "1551170061404864546", name: "SuccesWhite",   animated: true  },
+  rope:          { str: "<:sk_warn:1551170088995389440>",      id: "1551170088995389440", name: "sk_warn",       animated: false },
   transcript:    { str: "<:0white_pm:1551170015774900294>",   id: "1551170015774900294", name: "0white_pm",     animated: false },
-  launch:        { str: "<a:red_point:1471148554717499558>",  id: "1471148554717499558", name: "red_point",     animated: true  },
-  users_icon:    { str: "<:user:1519271719137968238>",        id: "1519271719137968238", name: "user",          animated: false },
-  key_icon:      { str: "<:RedAdmin:1471461238620946584>",    id: "1471461238620946584", name: "RedAdmin",      animated: false },
+  launch:        { str: "<:sk_promote:1551170113271791771>",   id: "1551170113271791771", name: "sk_promote",    animated: false },
+  users_icon:    { str: "<:botuser:1551170035773481070>",     id: "1551170035773481070", name: "botuser",       animated: false },
+  key_icon:      { str: "<:sk_staffmanager:1551170224164900895>",id: "1551170224164900895", name: "sk_staffmanager",animated: false },
   edit_icon:     { str: "<:0white_pm:1551170015774900294>",   id: "1551170015774900294", name: "0white_pm",     animated: false },
-  recycle:       { str: "<:guidelines:1471461018956988568>",   id: "1471461018956988568", name: "guidelines",   animated: false },
-  spam:          { str: "<a:FireRedandBlack:1471148448622444679>",id: "1471148448622444679", name: "FireRedandBlack",animated: true},
-  badwords:      { str: "<:x_logMessage:1519269247908581498>",id: "1519269247908581498", name: "x_logMessage",  animated: false },
-  mentions_icon: { str: "<a:announcement:1471459879448477739>",id: "1471459879448477739", name: "announcement",animated: true },
-  attach:        { str: "<:ng_website:1471456690766348350>",   id: "1471456690766348350", name: "ng_website",    animated: false },
-  location:      { str: "<:user:1519271719137968238>",        id: "1519271719137968238", name: "user",          animated: false },
+  recycle:       { str: "<:sk_automations:1551170176882835497>",id: "1551170176882835497", name: "sk_automations",animated: false },
+  spam:          { str: "<:sk_antinuke:1551170217982496841>",  id: "1551170217982496841", name: "sk_antinuke",   animated: false },
+  badwords:      { str: "<:sk_ban:1551170098042372179>",      id: "1551170098042372179", name: "sk_ban",        animated: false },
+  mentions_icon: { str: "<:sk_broad:1551170272906874941>",    id: "1551170272906874941", name: "sk_broad",      animated: false },
+  attach:        { str: "<:sk_connect:1551170269559951381>",   id: "1551170269559951381", name: "sk_connect",    animated: false },
+  location:      { str: "<:botuser:1551170035773481070>",     id: "1551170035773481070", name: "botuser",       animated: false },
   thinking:      { str: "<:botinfo:1551170025732313109>",     id: "1551170025732313109", name: "botinfo",       animated: false },
-  c4_red:        { str: "<a:red_point:1471148554717499558>",  id: "1471148554717499558", name: "red_point",     animated: true  },
-  c4_yellow:     { str: "<:y_arrow:1519269086775873536>",     id: "1519269086775873536", name: "y_arrow",       animated: false },
+  c4_red:        { str: "<:sk_promote:1551170113271791771>",   id: "1551170113271791771", name: "sk_promote",    animated: false },
+  c4_yellow:     { str: "<a:playing:1551170052806541323>",    id: "1551170052806541323", name: "playing",       animated: true  },
   c4_empty:      { str: "<:0white_pm:1551170015774900294>",   id: "1551170015774900294", name: "0white_pm",     animated: false },
-  slot_cherry:   { str: "<a:red_point:1471148554717499558>",  id: "1471148554717499558", name: "red_point",     animated: true  },
-  slot_lemon:    { str: "<:y_arrow:1519269086775873536>",     id: "1519269086775873536", name: "y_arrow",       animated: false },
-  slot_grape:    { str: "<a:PurpleStar:1471148510245294100>", id: "1471148510245294100", name: "PurpleStar",    animated: true  },
-  slot_bell:     { str: "<a:announcement:1471459879448477739>",id: "1471459879448477739", name: "announcement",animated: true },
-  slot_diamond:  { str: "<a:PurpleStar:1471148510245294100>", id: "1471148510245294100", name: "PurpleStar",    animated: true  },
-  slot_seven:    { str: "<a:Fire_Cyan:1466875400243384421>",  id: "1466875400243384421", name: "Fire_Cyan",     animated: true  },
-  jackpot:       { str: "<:250885giveaway:1519270730540253204>",id: "1519270730540253204", name: "250885giveaway",animated: false},
-  big_win:       { str: "<a:stars:1471148954581209223>",      id: "1471148954581209223", name: "stars",         animated: true  },
-  small_win:     { str: "<a:yellow_tick:1471104306286694451>",id: "1471104306286694451", name: "yellow_tick",    animated: true  },
+  slot_cherry:   { str: "<notused:1551170113271791771>",      id: "1551170113271791771", name: "sk_promote",    animated: false },
+  slot_lemon:    { str: "<notused:1551170052806541323>",      id: "1551170052806541323", name: "playing",       animated: true  },
+  slot_grape:    { str: "<notused:1551170158407188490>",      id: "1551170158407188490", name: "sk_badge_premium",animated: false },
+  slot_bell:     { str: "<notused:1551170272906874941>",      id: "1551170272906874941", name: "sk_broad",      animated: false },
+  slot_diamond:  { str: "<notused:1551170151322746971>",      id: "1551170151322746971", name: "sk_badge_owner", animated: false },
+  slot_seven:    { str: "<notused:1551170188048207902>",      id: "1551170188048207902", name: "sk_autoheal",   animated: false },
+  jackpot:       { str: "<:sk_slots:1551170136869179503>",    id: "1551170136869179503", name: "sk_slots",      animated: false },
+  big_win:       { str: "<:sk_badge_owner:1551170151322746971>",id: "1551170151322746971", name: "sk_badge_owner", animated: false },
+  small_win:     { str: "<a:SuccesWhite:1551170061404864546>", id: "1551170061404864546", name: "SuccesWhite",   animated: true  },
   rps_rock:      { str: "<:0white_pm:1551170015774900294>",   id: "1551170015774900294", name: "0white_pm",     animated: false },
   rps_paper:     { str: "<:0white_pm:1551170015774900294>",   id: "1551170015774900294", name: "0white_pm",     animated: false },
-  rps_scissors:  { str: "<:x_logMessage:1519269247908581498>",id: "1519269247908581498", name: "x_logMessage",  animated: false },
-  rps_win:       { str: "<a:yellow_tick:1471104306286694451>",id: "1471104306286694451", name: "yellow_tick",    animated: true  },
+  rps_scissors:  { str: "<:sk_ban:1551170098042372179>",      id: "1551170098042372179", name: "sk_ban",        animated: false },
+  rps_win:       { str: "<a:SuccesWhite:1551170061404864546>", id: "1551170061404864546", name: "SuccesWhite",   animated: true  },
 };
 
-export function updateCustomEmoji(key: string, data: CustomEmojiEntry): void {
-  CE[key] = data;
+export function updateCustomEmoji(key: string, data: Partial<CustomEmojiEntry>): void {
+  if (RAW_CE[key]) {
+    Object.assign(RAW_CE[key], data);
+  } else {
+    RAW_CE[key] = {
+      str: data.str || "✨",
+      id: data.id || "",
+      name: data.name || key,
+      animated: Boolean(data.animated),
+    };
+  }
 }
+
+export const CE: Record<string, CustomEmojiEntry> = new Proxy(RAW_CE, {
+  get(target, prop: string) {
+    if (typeof prop !== "string") return (target as any)[prop];
+    const key = prop.toLowerCase();
+    const rawEntry = target[key] || target[prop];
+    const client = (globalThis as any).__discordClient;
+    const name = rawEntry?.name || prop;
+    const resolved = resolveDynamicEmoji(
+      client,
+      rawEntry?.str || name,
+      UNICODE_FALLBACKS[key] || UNICODE_FALLBACKS[name.toLowerCase()] || "✨"
+    );
+    
+    return {
+      str: resolved,
+      id: rawEntry?.id || "",
+      name: name,
+      animated: Boolean(rawEntry?.animated),
+      toString() { return resolved; },
+    };
+  }
+});
 
 /** Semantic aliases — all resolve to CE custom emojis. */
 export const EMOJI = {

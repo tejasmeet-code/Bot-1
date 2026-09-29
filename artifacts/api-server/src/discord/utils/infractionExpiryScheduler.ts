@@ -50,7 +50,7 @@ async function tick(client: Client): Promise<void> {
                   { label: "Expired", value: `<t:${Math.floor(inf.expiresAt! / 1000)}:D>` },
                 ])}\n\nThis infraction no longer counts against your record.`,
                 color: COLORS.success,
-                footer: "Relosta Bot",
+                footer: "Zenith Bot",
               })],
             }),
           ).catch(() => {});

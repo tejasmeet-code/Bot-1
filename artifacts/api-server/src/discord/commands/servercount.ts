@@ -64,7 +64,7 @@ const command: SlashCommand = {
         `**All-time joins:** ${allTime.toLocaleString()}\n\n` +
         (chunks[0]?.join("\n") ?? "No servers."),
       color: COLORS.info,
-      footer: "Dev only • Relosta Bot",
+      footer: "Dev only • Zenith Bot",
     });
 
     await interaction.editReply({ embeds: [header] });

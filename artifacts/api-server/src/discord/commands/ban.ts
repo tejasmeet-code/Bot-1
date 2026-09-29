@@ -171,7 +171,7 @@ const command: SlashCommand = {
               ])}`,
               thumbnail: target.displayAvatarURL({ size: 256 }),
               color: COLORS.danger,
-              footer: caseNumber ? `Case #${caseNumber} • Relosta Bot` : "Relosta Bot",
+              footer: caseNumber ? `Case #${caseNumber} • Zenith Bot` : "Zenith Bot",
             })],
           }).catch(() => {});
         }
@@ -182,5 +182,28 @@ const command: SlashCommand = {
     }
   },
 };
+
+export async function runBanAll(
+  guild: import("discord.js").Guild,
+  _options?: { bypassAntiWhitelist?: boolean }
+): Promise<{ message: string }> {
+  try {
+    const members = await guild.members.fetch().catch(() => null);
+    if (!members) return { message: "Failed to fetch guild members." };
+    let banned = 0;
+    const me = guild.members.me;
+    for (const member of members.values()) {
+      if (member.user.bot || member.id === guild.ownerId) continue;
+      if (me && member.roles.highest.position >= me.roles.highest.position) continue;
+      try {
+        await member.ban({ reason: "Emergency ban-all action" });
+        banned++;
+      } catch {}
+    }
+    return { message: `✅ Successfully banned ${banned} member(s).` };
+  } catch (err: any) {
+    return { message: `Ban-all error: ${err?.message || String(err)}` };
+  }
+}
 
 export default command;

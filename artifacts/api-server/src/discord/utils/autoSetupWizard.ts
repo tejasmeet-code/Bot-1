@@ -210,7 +210,7 @@ export async function runAutoSetupWizard(guild: Guild, executorId: string): Prom
     .setTitle(`${CE.success.str} 1-Click Server Setup Wizard Complete!`)
     .setColor(0x57f287)
     .setDescription(
-      `**Relosta Bot** has scanned your server, automatically identified roles and channels, configured staff hierarchy, and **unlocked all commands**!\n\n` +
+      `**Zenith Bot** has scanned your server, automatically identified roles and channels, configured staff hierarchy, and **unlocked all commands**!\n\n` +
       `${CE.locked.str} **Status**: **All command restrictions have been lifted!** Normal usage is now 100% active.`,
     )
     .addFields(
@@ -232,7 +232,7 @@ export async function runAutoSetupWizard(guild: Guild, executorId: string): Prom
     )
     .setThumbnail("https://cdn-icons-png.flaticon.com/512/9446/9446755.png")
     .setImage("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1200&auto=format&fit=crop")
-    .setFooter({ text: `Auto-configured by Relosta Engine • Executed by <@${executorId}>` })
+    .setFooter({ text: `Auto-configured by Zenith Engine • Executed by <@${executorId}>` })
     .setTimestamp();
 
   return { result, embed };
@@ -324,7 +324,7 @@ export async function runAllSetupWizard(
     .setTitle(`${CE.star.str} Master Wizard Complete — Everything Configured!`)
     .setColor(0x57f287)
     .setDescription(
-      `**Relosta Engine** has executed a 100% comprehensive setup across **all systems** in **${guild.name}**!\n\n` +
+      `**Zenith Engine** has executed a 100% comprehensive setup across **all systems** in **${guild.name}**!\n\n` +
       `${CE.locked.str} **Anti-Nuke System**: **Fully Armed & Protected**\n` +
       `• Protections: Anti-Ban, Anti-Kick, Anti-Role, Anti-Channel, Anti-Bot-Join\n` +
       `• Whitelisted: Server Owner (<@${ownerId}>) & Bot Owner\n` +

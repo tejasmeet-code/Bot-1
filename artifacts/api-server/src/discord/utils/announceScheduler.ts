@@ -38,7 +38,7 @@ async function tick(client: Client): Promise<void> {
           title: entry.title,
           description: entry.message,
           color: entry.color,
-          footer: `Scheduled by ${entry.createdByTag} • Relosta Bot`,
+          footer: `Scheduled by ${entry.createdByTag} • Zenith Bot`,
         })],
       });
 

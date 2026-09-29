@@ -179,9 +179,11 @@ export interface PartnershipConfig {
 }
 
 export interface VerifyConfig {
-  rolesToAssign: string[];
-  useModal: boolean;
+  rolesToAssign?: string[];
+  useModal?: boolean;
   customMessage?: string;
+  verifiedRoleId?: string;
+  unverifiedRoleId?: string;
 }
 
 export interface GuildConfig {
@@ -196,6 +198,7 @@ export interface GuildConfig {
   appealServerInvite?: string;
   partnershipConfig?: PartnershipConfig;
   verifyConfig?: VerifyConfig;
+  verifiedRoleId?: string;
   antiNukeConfig?: AntiNukeConfig;
   maintenanceConfig?: MaintenanceModuleConfig;
   commandsUnlocked?: boolean;
@@ -226,6 +229,10 @@ export interface GuildConfig {
   noPrefixUserIds?: string[];
   noPrefixRoles?: string[];
   specializedBots?: Record<SpecializedBotCategory, SpecializedBotEntry[]>;
+  customBotProfile?: {
+    name?: string;
+    avatarUrl?: string;
+  };
 }
 
 export type SpecializedBotCategory =

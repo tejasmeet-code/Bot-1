@@ -38,7 +38,7 @@ async function tick(client: Client): Promise<void> {
         const createdAt = new Date(appeal.created_at).getTime();
         if (now - createdAt < cutoffMs) continue; // not old enough yet
 
-        await updateAppealStatus(appeal.id, "rejected", "Relosta Bot (auto-closed)");
+        await updateAppealStatus(appeal.id, "rejected", "Zenith Bot (auto-closed)");
 
         client.users.fetch(appeal.user_id).then(user =>
           user.send({
@@ -49,7 +49,7 @@ async function tick(client: Client): Promise<void> {
                 `**${autoCloseDays} day${autoCloseDays !== 1 ? "s" : ""}** of inactivity.\n\n` +
                 `The original punishment remains in place. Contact server staff if you believe this is in error.`,
               color: COLORS.neutral,
-              footer: "Relosta Bot",
+              footer: "Zenith Bot",
             })],
           })
         ).catch(() => {});

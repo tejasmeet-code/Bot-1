@@ -1,5 +1,8 @@
 import { spawn } from "child_process";
+import YouTube from "youtube-sr";
+import ytdl from "@distube/ytdl-core";
 import { logger } from "../../lib/logger";
+import { CE } from "../utils/embedStyle";
 
 export interface ResolvedMetadata {
   title: string;
@@ -9,51 +12,7 @@ export interface ResolvedMetadata {
   url: string;
   streamUrl: string;
   thumbnailUrl: string;
-  source: "youtube" | "spotify" | "soundcloud" | "direct" | "radio" | "itunes" | "jiosaavn" | "gaana";
-}
-
-/**
- * Executes yt-dlp to extract direct high quality YouTube audio stream for a search query
- */
-export async function resolveYtDlpStream(query: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    try {
-      const proc = spawn("/usr/local/bin/yt-dlp", [
-        "-g",
-        "--default-search",
-        "ytsearch",
-        "-f",
-        "bestaudio/best",
-        "--no-warnings",
-        `ytsearch1:${query}`,
-      ]);
-      let stdout = "";
-      proc.stdout.on("data", (chunk) => {
-        stdout += chunk.toString();
-      });
-      const timer = setTimeout(() => {
-        try {
-          proc.kill("SIGKILL");
-        } catch {}
-        resolve(null);
-      }, 7000);
-      proc.on("close", (code) => {
-        clearTimeout(timer);
-        const url = stdout.trim().split("\n")[0];
-        if (code === 0 && url && url.startsWith("http")) {
-          resolve(url);
-        } else {
-          resolve(null);
-        }
-      });
-      proc.on("error", () => {
-        clearTimeout(timer);
-        resolve(null);
-      });
-    } catch {
-      resolve(null);
-    }
-  });
+  source: "youtube" | "spotify" | "soundcloud" | "direct" | "radio" | "itunes";
 }
 
 export interface AudioSourceOption {
@@ -65,87 +24,182 @@ export interface AudioSourceOption {
 }
 
 /**
- * Resolves all available audio sources/mirrors for a song so users can preview, select, or change sources
+ * Extracts raw direct audio stream URL from YouTube video URL using @distube/ytdl-core
+ */
+export async function getAudioStreamFromYtdl(youtubeUrl: string): Promise<string | null> {
+  try {
+    if (!youtubeUrl || !youtubeUrl.includes("youtube.com") && !youtubeUrl.includes("youtu.be")) {
+      return null;
+    }
+    const info = await ytdl.getInfo(youtubeUrl, {
+      requestOptions: {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      },
+    });
+    const audioFormats = ytdl.filterFormats(info.formats, "audioonly");
+    if (audioFormats && audioFormats.length > 0) {
+      const best = audioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+      if (best?.url) {
+        return best.url;
+      }
+    }
+  } catch (err) {
+    logger.debug({ err, youtubeUrl }, "ytdl-core extraction failed; trying yt-dlp / iTunes fallback");
+  }
+  return null;
+}
+
+/**
+ * Resolves direct audio stream URL using yt-dlp binary with PATH search fallback
+ */
+export async function getDirectStreamUrlWithYtDlp(urlOrQuery: string): Promise<string | null> {
+  const binaryCandidates = ["yt-dlp", "/usr/bin/yt-dlp", "/usr/local/bin/yt-dlp"];
+
+  for (const binPath of binaryCandidates) {
+    const streamUrl = await new Promise<string | null>((resolve) => {
+      try {
+        const searchTarget = urlOrQuery.startsWith("http")
+          ? urlOrQuery
+          : `scsearch1:${urlOrQuery}`;
+        const proc = spawn(binPath, [
+          "-g",
+          "-f", "bestaudio/best",
+          "--no-warnings",
+          searchTarget,
+        ]);
+        let stdout = "";
+        proc.stdout.on("data", (chunk) => {
+          stdout += chunk.toString();
+        });
+        const timer = setTimeout(() => {
+          try { proc.kill("SIGKILL"); } catch {}
+          resolve(null);
+        }, 5000);
+        proc.on("close", (code) => {
+          clearTimeout(timer);
+          const url = stdout.trim().split("\n")[0];
+          if (code === 0 && url && url.startsWith("http")) {
+            resolve(url);
+          } else {
+            resolve(null);
+          }
+        });
+        proc.on("error", () => {
+          clearTimeout(timer);
+          resolve(null);
+        });
+      } catch {
+        resolve(null);
+      }
+    });
+
+    if (streamUrl && streamUrl.startsWith("http")) {
+      return streamUrl;
+    }
+  }
+
+  return null;
+}
+
+export async function resolveYouTubeUrl(url: string): Promise<ResolvedMetadata[]> {
+  return searchTracks(url, 1);
+}
+
+/**
+ * Searches YouTube catalog for high-quality audio tracks
+ */
+export async function searchYouTubeCatalog(query: string, limit = 10): Promise<ResolvedMetadata[]> {
+  const cleanQuery = query.trim();
+  if (!cleanQuery) return [];
+
+  try {
+    const searchFn = (YouTube as any).search || (YouTube as any).default?.search;
+    if (typeof searchFn === "function") {
+      const ytVideos = await searchFn(cleanQuery, { limit: Math.min(limit, 10), type: "video" }).catch(() => []);
+      if (ytVideos && ytVideos.length > 0) {
+        const results: ResolvedMetadata[] = [];
+        for (const v of ytVideos) {
+          if (!v || !v.title) continue;
+          results.push({
+            title: v.title,
+            artist: v.channel?.name || "YouTube Artist",
+            durationSeconds: Math.round((v.duration || 210000) / 1000) || 210,
+            url: v.url || `https://www.youtube.com/watch?v=${v.id}`,
+            streamUrl: v.url || `https://www.youtube.com/watch?v=${v.id}`,
+            thumbnailUrl: v.thumbnail?.url || "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=600&auto=format&fit=crop",
+            source: "youtube",
+          });
+        }
+        if (results.length > 0) return results;
+      }
+    }
+  } catch (err) {
+    logger.debug({ err, cleanQuery }, "YouTube SR search failed");
+  }
+
+  return [];
+}
+
+/**
+ * Searches iTunes for high quality previews and metadata
+ */
+export async function searchITunesCatalog(query: string, limit = 5): Promise<ResolvedMetadata[]> {
+  try {
+    const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=${limit}`;
+    const res = await fetch(itunesUrl, { signal: AbortSignal.timeout(3500) }).catch(() => null);
+    if (res && res.ok) {
+      const data: any = await res.json().catch(() => null);
+      if (data?.results && Array.isArray(data.results)) {
+        return data.results.map((item: any) => ({
+          title: item.trackName || query,
+          artist: item.artistName || "Unknown Artist",
+          album: item.collectionName,
+          durationSeconds: Math.round((item.trackTimeMillis || 210000) / 1000),
+          url: item.trackViewUrl || "https://music.apple.com",
+          streamUrl: item.previewUrl || "",
+          thumbnailUrl: (item.artworkUrl100 || "").replace("100x100bb", "600x600bb"),
+          source: "itunes" as const,
+        }));
+      }
+    }
+  } catch {}
+  return [];
+}
+
+/**
+ * Resolves all available audio sources/mirrors for a song
  */
 export async function resolveAllAudioSources(title: string, artist: string, currentStreamUrl?: string): Promise<AudioSourceOption[]> {
   const query = `${title} ${artist}`.trim();
   const sources: AudioSourceOption[] = [];
 
-  // 1. JioSaavn 320kbps Lossless Source
+  // 1. YouTube Audio Source
   try {
-    const saavnUrl = `https://saavn.dev/api/search/songs?query=${encodeURIComponent(query)}&limit=3`;
-    const res = await fetch(saavnUrl, { signal: AbortSignal.timeout(4000) }).catch(() => null);
-    if (res && res.ok) {
-      const data: any = await res.json().catch(() => null);
-      const song = data?.data?.results?.[0];
-      if (song && song.downloadUrl) {
-        const urls = song.downloadUrl;
-        const hq320 = urls.find((u: any) => u.quality === "320kbps")?.link;
-        const hq160 = urls.find((u: any) => u.quality === "160kbps")?.link;
-        const bestSaavn = hq320 || hq160 || urls[urls.length - 1]?.link;
-        if (bestSaavn) {
-          sources.push({
-            id: "jiosaavn_320k",
-            sourceName: "JioSaavn 320kbps",
-            quality: hq320 ? "320kbps Lossless AAC" : "160kbps HQ Audio",
-            icon: "🎶",
-            streamUrl: bestSaavn,
-          });
-        }
-      }
-    }
-  } catch {}
-
-  // 2. YouTube Music HQ Stream
-  try {
-    const ytUrl = await resolveYtDlpStream(query);
-    if (ytUrl) {
+    const ytSongs = await searchYouTubeCatalog(query, 1);
+    if (ytSongs[0]?.streamUrl) {
       sources.push({
-        id: "youtube_hq",
-        sourceName: "YouTube Music HQ",
-        quality: "Opus 160kbps / 48kHz High-Fi",
-        icon: "▶️",
-        streamUrl: ytUrl,
+        id: "youtube_hd",
+        sourceName: "YouTube High Quality Audio",
+        quality: "320kbps HD Audio",
+        icon: CE.music.str,
+        streamUrl: ytSongs[0].streamUrl,
       });
     }
   } catch {}
 
-  // 3. Apple Music / iTunes
+  // 2. Apple Music / iTunes
   try {
-    const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`;
-    const res = await fetch(itunesUrl, { signal: AbortSignal.timeout(3500) }).catch(() => null);
-    if (res && res.ok) {
-      const data: any = await res.json().catch(() => null);
-      const item = data?.results?.[0];
-      if (item && item.previewUrl) {
-        sources.push({
-          id: "apple_music",
-          sourceName: "Apple Music Stream",
-          quality: "256kbps AAC Audio",
-          icon: "🍏",
-          streamUrl: item.previewUrl,
-        });
-      }
-    }
-  } catch {}
-
-  // 4. SoundCloud Stream
-  try {
-    const scQuery = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&client_id=iZ864qAfL6B29B3eS45s0&limit=1`;
-    const res = await fetch(scQuery, { signal: AbortSignal.timeout(3000) }).catch(() => null);
-    if (res && res.ok) {
-      const data: any = await res.json().catch(() => null);
-      const track = data?.collection?.[0];
-      const streamUrl = track?.media?.transcodings?.[0]?.url;
-      if (streamUrl) {
-        sources.push({
-          id: "soundcloud_hq",
-          sourceName: "SoundCloud Lossless",
-          quality: "128kbps HQ Stream",
-          icon: "☁️",
-          streamUrl,
-        });
-      }
+    const itunes = await searchITunesCatalog(query, 1);
+    if (itunes[0]?.streamUrl) {
+      sources.push({
+        id: "apple_music",
+        sourceName: "Apple Music Stream",
+        quality: "256kbps AAC Audio",
+        icon: CE.play.str,
+        streamUrl: itunes[0].streamUrl,
+      });
     }
   } catch {}
 
@@ -153,9 +207,9 @@ export async function resolveAllAudioSources(title: string, artist: string, curr
   if (currentStreamUrl && !sources.some((s) => s.streamUrl === currentStreamUrl)) {
     sources.push({
       id: "direct_stream",
-      sourceName: "Direct Web Audio Stream",
-      quality: "High Bitrate Master Stream",
-      icon: "📻",
+      sourceName: "Direct Audio Stream",
+      quality: "High Bitrate Stream",
+      icon: CE.radio.str,
       streamUrl: currentStreamUrl,
     });
   }
@@ -164,153 +218,44 @@ export async function resolveAllAudioSources(title: string, artist: string, curr
 }
 
 /**
- * Resolves a full-length 320kbps audio stream URL for any track title and artist
+ * Resolves a full-length audio stream URL for any track title and artist using YouTube / SoundCloud / iTunes
  */
 export async function resolveFullStreamUrl(title: string, artist: string, currentStreamUrl?: string): Promise<string> {
-  // If currentStreamUrl is already a direct full audio link (not an iTunes 30s preview)
-  if (
-    currentStreamUrl &&
-    !currentStreamUrl.includes("apple.com") &&
-    !currentStreamUrl.includes("audio-ssl.itunes.apple.com") &&
-    !currentStreamUrl.includes("mzstatic.com") &&
-    (currentStreamUrl.includes(".mp3") ||
-      currentStreamUrl.includes(".aac") ||
-      currentStreamUrl.includes(".m4a") ||
-      currentStreamUrl.includes(".flac") ||
-      currentStreamUrl.includes("googlevideo.com") ||
-      currentStreamUrl.includes("stream") ||
-      currentStreamUrl.includes("icecast") ||
-      currentStreamUrl.includes("shoutcast"))
-  ) {
+  const query = `${title} ${artist}`.trim();
+
+  // 1. If currentStreamUrl is a YouTube webpage URL, extract raw audio stream using ytdl-core
+  if (currentStreamUrl && (currentStreamUrl.includes("youtube.com") || currentStreamUrl.includes("youtu.be"))) {
+    const ytdlStream = await getAudioStreamFromYtdl(currentStreamUrl);
+    if (ytdlStream && ytdlStream.startsWith("http")) {
+      logger.info({ title, artist, source: "ytdl-core Stream" }, "Resolved direct YouTube audio stream");
+      return ytdlStream;
+    }
+  }
+
+  // 2. Try yt-dlp direct stream extraction
+  try {
+    const directStream = await getDirectStreamUrlWithYtDlp(query);
+    if (directStream && directStream.startsWith("http")) {
+      logger.info({ title, artist, source: "yt-dlp Direct Stream" }, "Resolved direct stream URL");
+      return directStream;
+    }
+  } catch {}
+
+  // 3. If currentStreamUrl is already a direct audio media stream (e.g. mp3, m4a, saavn, soma), use it
+  if (currentStreamUrl && currentStreamUrl.startsWith("http") && !currentStreamUrl.includes("youtube.com") && !currentStreamUrl.includes("youtu.be")) {
     return currentStreamUrl;
   }
 
-  const query = `${title} ${artist}`.trim();
-
-  // 1. Try JioSaavn API first for exact Indian/Global 320kbps track match
+  // 4. Fallback to iTunes catalog direct AAC audio stream
   try {
-    const saavnUrl = `https://saavn.dev/api/search/songs?query=${encodeURIComponent(query)}&limit=3`;
-    const res = await fetch(saavnUrl, { signal: AbortSignal.timeout(4000) }).catch(() => null);
-    if (res && res.ok) {
-      const data: any = await res.json().catch(() => null);
-      const results = data?.data?.results;
-      if (results && Array.isArray(results) && results.length > 0) {
-        // Find best title match to avoid playing random tunes
-        const cleanTitleLower = title.toLowerCase();
-        const matchedSong = results.find((s: any) => s.name?.toLowerCase().includes(cleanTitleLower) || cleanTitleLower.includes(s.name?.toLowerCase())) || results[0];
-        if (matchedSong && matchedSong.downloadUrl) {
-          const urls = matchedSong.downloadUrl;
-          const hqLink =
-            urls.find((u: any) => u.quality === "320kbps")?.link ||
-            urls.find((u: any) => u.quality === "160kbps")?.link ||
-            urls[urls.length - 1]?.link;
-          if (hqLink) {
-            logger.info({ title, artist, matched: matchedSong.name, source: "JioSaavn 320kbps" }, "Resolved full 320kbps stream URL");
-            return hqLink;
-          }
-        }
-      }
+    const itunesResults = await searchITunesCatalog(query, 3);
+    if (itunesResults.length > 0 && itunesResults[0].streamUrl) {
+      logger.info({ title, artist, source: "iTunes Fallback" }, "Resolved working iTunes AAC stream URL fallback");
+      return itunesResults[0].streamUrl;
     }
   } catch {}
 
-  // 2. Try yt-dlp YouTube audio stream resolution for exact song match
-  try {
-    const ytDlpUrl = await resolveYtDlpStream(query);
-    if (ytDlpUrl) {
-      logger.info({ title, artist, source: "yt-dlp YouTube Audio" }, "Resolved full track stream URL");
-      return ytDlpUrl;
-    }
-  } catch {}
-
-  // 3. Fallback to Piped / Invidious YouTube Music Audio API
-  const pipedInstances = [
-    "https://pipedapi.kavin.rocks",
-    "https://api.piped.privacydev.net",
-    "https://pipedapi.mha.fi",
-  ];
-
-  for (const instance of pipedInstances) {
-    try {
-      const searchRes = await fetch(`${instance}/search?q=${encodeURIComponent(query)}&filter=music_songs`, {
-        signal: AbortSignal.timeout(3500),
-      }).catch(() => null);
-
-      if (searchRes && searchRes.ok) {
-        const searchData: any = await searchRes.json().catch(() => null);
-        const item = searchData?.items?.[0];
-        if (item && item.url) {
-          const videoId = item.url.split("v=").pop();
-          if (videoId) {
-            const streamsRes = await fetch(`${instance}/streams/${videoId}`, {
-              signal: AbortSignal.timeout(3500),
-            }).catch(() => null);
-
-            if (streamsRes && streamsRes.ok) {
-              const streamData: any = await streamsRes.json().catch(() => null);
-              const audioStreams = streamData?.audioStreams;
-              if (audioStreams && audioStreams.length > 0) {
-                audioStreams.sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
-                const bestStream = audioStreams[0].url;
-                if (bestStream) {
-                  logger.info({ title, artist, bitrate: audioStreams[0].bitrate, source: "Piped Audio" }, "Resolved full audio stream");
-                  return bestStream;
-                }
-              }
-            }
-          }
-        }
-      }
-    } catch {}
-  }
-
-  // If no audio stream found, return existing stream URL or empty string
   return currentStreamUrl || "";
-}
-
-/**
- * Searches JioSaavn & Gaana API for full Indian & Global songs catalog
- */
-export async function searchJioSaavnCatalog(query: string, limit = 10): Promise<ResolvedMetadata[]> {
-  try {
-    const saavnUrl = `https://saavn.dev/api/search/songs?query=${encodeURIComponent(query)}&limit=${limit}`;
-    const res = await fetch(saavnUrl, { signal: AbortSignal.timeout(5000) }).catch(() => null);
-    if (res && res.ok) {
-      const data: any = await res.json().catch(() => null);
-      const results = data?.data?.results;
-      if (results && Array.isArray(results) && results.length > 0) {
-        return results.map((song: any) => {
-          const downloadUrls = song.downloadUrl || [];
-          const hqStream =
-            downloadUrls.find((u: any) => u.quality === "320kbps")?.link ||
-            downloadUrls.find((u: any) => u.quality === "160kbps")?.link ||
-            downloadUrls[downloadUrls.length - 1]?.link ||
-            "";
-
-          const imageArray = song.image || [];
-          const coverArt =
-            imageArray.find((i: any) => i.quality === "500x500")?.link ||
-            imageArray[imageArray.length - 1]?.link ||
-            "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=600&auto=format&fit=crop";
-
-          const primaryArtist = song.primaryArtists || song.artists?.primary?.[0]?.name || "Artist";
-
-          return {
-            title: song.name || query,
-            artist: primaryArtist,
-            album: song.album?.name,
-            durationSeconds: Math.round(Number(song.duration || 210)),
-            url: song.url || `https://www.jiosaavn.com/song/${song.id}`,
-            streamUrl: hqStream,
-            thumbnailUrl: coverArt,
-            source: "jiosaavn",
-          };
-        });
-      }
-    }
-  } catch (err) {
-    logger.warn({ err, query }, "Error searching JioSaavn catalog");
-  }
-  return [];
 }
 
 /**
@@ -319,17 +264,15 @@ export async function searchJioSaavnCatalog(query: string, limit = 10): Promise<
 export async function resolveSpotifyUrl(url: string): Promise<ResolvedMetadata[]> {
   try {
     const cleanUrl = url.trim();
-    // 1. Check if it's a valid open.spotify.com URL
     const match = cleanUrl.match(/open\.spotify\.com\/(track|album|playlist|artist)\/([a-zA-Z0-9]+)/i);
     if (!match) return [];
 
     const type = match[1].toLowerCase();
     const id = match[2];
 
-    // Use Spotify oEmbed for instant rate-limit-free metadata resolution
     const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(cleanUrl)}`;
     const res = await fetch(oembedUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; RelostaMusicBot/1.0)" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; ZenithMusicBot/1.0)" },
       signal: AbortSignal.timeout(6000),
     }).catch(() => null);
 
@@ -338,7 +281,6 @@ export async function resolveSpotifyUrl(url: string): Promise<ResolvedMetadata[]
       oembedData = await res.json().catch(() => null);
     }
 
-    // Attempt to fetch embed page HTML to extract track listings for albums/playlists
     const embedPageUrl = `https://open.spotify.com/embed/${type}/${id}`;
     const pageRes = await fetch(embedPageUrl, {
       headers: {
@@ -350,7 +292,6 @@ export async function resolveSpotifyUrl(url: string): Promise<ResolvedMetadata[]
 
     if (pageRes && pageRes.ok) {
       const html = await pageRes.text();
-      // Look for embedded JSON state inside <script id="__NEXT_DATA__"> or similar
       const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/);
       if (nextDataMatch) {
         try {
@@ -375,11 +316,11 @@ export async function resolveSpotifyUrl(url: string): Promise<ResolvedMetadata[]
                   title,
                   artist,
                   album: albumOrPlaylistTitle,
-                  durationSeconds: duration > 0 ? duration : 180,
+                  durationSeconds: duration,
                   url: trackUrl,
-                  streamUrl: "", // Will be resolved during playback
+                  streamUrl: "",
                   thumbnailUrl: coverUrl,
-                  source: "spotify",
+                  source: "spotify" as const,
                 };
               });
             }
@@ -388,91 +329,55 @@ export async function resolveSpotifyUrl(url: string): Promise<ResolvedMetadata[]
       }
     }
 
-    // Single track fallback from oEmbed
-    if (oembedData && oembedData.title) {
-      const rawTitle = oembedData.title; // usually "Song Name by Artist"
-      let songTitle = rawTitle;
-      let artistName = "Spotify Artist";
-
-      if (rawTitle.includes(" by ")) {
-        const parts = rawTitle.split(" by ");
-        songTitle = parts[0];
-        artistName = parts.slice(1).join(" by ");
-      }
-
+    if (oembedData) {
       return [
         {
-          title: songTitle,
-          artist: artistName,
+          title: oembedData.title || "Spotify Track",
+          artist: oembedData.author_name || "Spotify Artist",
           durationSeconds: 210,
           url: cleanUrl,
           streamUrl: "",
-          thumbnailUrl:
-            oembedData.thumbnail_url ||
-            "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=600&auto=format&fit=crop",
-          source: "spotify",
+          thumbnailUrl: oembedData.thumbnail_url || "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=600&auto=format&fit=crop",
+          source: "spotify" as const,
         },
       ];
     }
   } catch (err) {
-    logger.warn({ err, url }, "Error resolving Spotify metadata");
+    logger.warn({ err, url }, "Error resolving Spotify URL");
   }
-
   return [];
 }
 
 /**
- * Parses YouTube video, shorts, or playlist URLs and extracts metadata
+ * Searches music catalogs for matching tracks by query
  */
-export async function resolveYouTubeUrl(url: string): Promise<ResolvedMetadata[]> {
-  try {
-    const cleanUrl = url.trim();
-    // Use YouTube oEmbed for instant rate-limit-resistant metadata lookup
-    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(cleanUrl)}&format=json`;
-    const res = await fetch(oembedUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; RelostaMusicBot/1.0)" },
-      signal: AbortSignal.timeout(6000),
-    }).catch(() => null);
+export async function searchTracks(query: string, limit = 10): Promise<ResolvedMetadata[]> {
+  const cleanQuery = query.trim();
+  if (!cleanQuery) return [];
 
-    if (res && res.ok) {
-      const data: any = await res.json().catch(() => null);
-      if (data && data.title) {
-        let title = data.title;
-        let artist = data.author_name || "YouTube Creator";
+  if (cleanQuery.includes("open.spotify.com")) {
+    return resolveSpotifyUrl(cleanQuery);
+  }
 
-        // Clean up common "Artist - Title" patterns
-        if (title.includes(" - ")) {
-          const parts = title.split(" - ");
-          if (parts.length >= 2) {
-            artist = parts[0].trim();
-            title = parts.slice(1).join(" - ").trim();
-          }
-        }
+  // 1. Search YouTube Catalog
+  const ytResults = await searchYouTubeCatalog(cleanQuery, limit);
+  if (ytResults.length > 0) {
+    return ytResults;
+  }
 
-        // Clean up brackets like (Official Video), [HD], (Lyrics)
-        title = title
-          .replace(/[\(\[](official\s*(music\s*)?video|audio|lyrics|4k|hd|visualizer|remastered)[\)\]]/gi, "")
-          .trim();
-
-        return [
-          {
-            title,
-            artist,
-            durationSeconds: 240,
-            url: cleanUrl,
-            streamUrl: "", // Will be streamed via direct audio pipeline
-            thumbnailUrl:
-              data.thumbnail_url ||
-              "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=600&auto=format&fit=crop",
-            source: "youtube",
-          },
-        ];
-      }
-    }
-  } catch (err) {
-    logger.warn({ err, url }, "Error resolving YouTube URL");
+  // 2. Search iTunes as fallback provider
+  const itunesResults = await searchITunesCatalog(cleanQuery, limit);
+  if (itunesResults.length > 0) {
+    return itunesResults;
   }
 
   return [];
 }
 
+export async function searchArtistSongs(artist: string, limit = 30): Promise<ResolvedMetadata[]> {
+  return searchTracks(`${artist} songs`, limit);
+}
+
+export async function searchAlbumSongs(album: string, limit = 20): Promise<ResolvedMetadata[]> {
+  return searchTracks(`${album} album`, limit);
+}

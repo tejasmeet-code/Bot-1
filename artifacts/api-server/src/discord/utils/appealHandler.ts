@@ -115,7 +115,7 @@ export async function handleAppealModalSubmit(i: any): Promise<void> {
             ...(proof ? [{ label: "Proof", value: proof }] : []),
           ])}`,
           thumbnail: i.user.displayAvatarURL({ size: 256 }),
-          footer: `Appeal ID #${appeal.id} • Relosta Bot`,
+          footer: `Appeal ID #${appeal.id} • Zenith Bot`,
         });
 
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(

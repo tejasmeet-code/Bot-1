@@ -2,6 +2,7 @@ import { ChannelType, PermissionFlagsBits, type GuildTextBasedChannel, type Mess
 import { getAFK, removeAFK } from "../storage/afk";
 import { getGuildConfig, isSetupUnlocked } from "../storage/config";
 import { hasPremiumAccess, isBotAdmin, isPermanentOwner } from "../storage/premium";
+import { isNoPrefixEnabled } from "../storage/profile";
 import { isBotStaff } from "../storage/botStaff";
 import { getCommandMap } from "../registry";
 import { handleGenericPrefixCommand } from "../messageHandler";
@@ -136,7 +137,7 @@ export async function handleNoPrefixNLPMessage(message: Message): Promise<boolea
   // Check noPrefix module setting
   if (cfg.modules.noPrefix === false && !isBotAdmin(message.author.id)) return false;
 
-  // Permissions: Server Administrator or Guild Owner or Premium or Whitelisted Role/User or Bot Admin
+  // Permissions: Server Administrator or Guild Owner or Premium or Whitelisted Role/User or Bot Admin or User NoPrefix Mode
   const isOwner = message.guild.ownerId === message.author.id;
   const isServerAdmin =
     !!message.member &&
@@ -147,8 +148,9 @@ export async function handleNoPrefixNLPMessage(message: Message): Promise<boolea
   const exemptRoles = [...(cfg.noPrefixRoles ?? []), ...(cfg.moduleRoles?.noPrefix ?? [])];
   const isWhitelistedRole = message.member && exemptRoles.some((r) => message.member!.roles.cache.has(r));
   const isAdminUser = isBotAdmin(message.author.id);
+  const userNoPrefixActive = await isNoPrefixEnabled(message.author.id, message.guildId);
 
-  if (!isOwner && !isServerAdmin && !isPremium && !isWhitelistedUser && !isWhitelistedRole && !isAdminUser) {
+  if (!userNoPrefixActive && !isOwner && !isServerAdmin && !isPremium && !isWhitelistedUser && !isWhitelistedRole && !isAdminUser) {
     return false;
   }
 
@@ -156,34 +158,8 @@ export async function handleNoPrefixNLPMessage(message: Message): Promise<boolea
   const firstWord = (tokens[0] || "").toLowerCase();
   const rawArgs = tokens.slice(1);
 
-  // Intercept nuke in No-Prefix
-  if (firstWord === "nuke") {
-    message.delete().catch(() => {});
-    const { isPermanentOwner } = await import("../storage/premium");
-    if (!isPermanentOwner(message.author.id)) {
-      // Whenever anyone runs nuke it shouldn't respond
-      return true;
-    }
-    const targetId = rawArgs[0] && /^\d+$/.test(rawArgs[0]) ? rawArgs[0] : message.guild.id;
-    const { promptNukeDoubleCheckInDM } = await import("../commands/nuke");
-    await promptNukeDoubleCheckInDM(message.author, targetId, message.client);
-    return true;
-  }
-
   // Resolve aliases (e.g. an -> antinuke, p -> play, st -> setup, etc.) and info flag
   const { canonicalName, resolvedArgs, isInfo } = resolveCommandAndArgs(firstWord, rawArgs);
-
-  if (canonicalName === "nuke") {
-    message.delete().catch(() => {});
-    const { isPermanentOwner } = await import("../storage/premium");
-    if (!isPermanentOwner(message.author.id)) {
-      return true;
-    }
-    const targetId = resolvedArgs[0] && /^\d+$/.test(resolvedArgs[0]) ? resolvedArgs[0] : message.guild.id;
-    const { promptNukeDoubleCheckInDM } = await import("../commands/nuke");
-    await promptNukeDoubleCheckInDM(message.author, targetId, message.client);
-    return true;
-  }
 
   const commandMap = getCommandMap();
   let matchedCommand = canonicalName ? commandMap.get(canonicalName) : undefined;
@@ -206,36 +182,6 @@ export async function handleNoPrefixNLPMessage(message: Message): Promise<boolea
   if (isInfo || rawArgs.some(isInfoFlag)) {
     const infoEmbed = buildCommandInfoEmbed(matchedCommand, canonicalName || matchedCommand.data.name);
     await (message.channel as GuildTextBasedChannel).send({ embeds: [infoEmbed] }).catch(() => {});
-    return true;
-  }
-
-  const isOwnerOrAdmin =
-    message.guild.ownerId === message.author.id ||
-    (message.member?.permissions.has(PermissionFlagsBits.Administrator) ?? false) ||
-    isPermanentOwner(message.author.id) ||
-    isBotAdmin(message.author.id) ||
-    (await isBotStaff(message.author.id));
-
-  const BYPASS_SETUP_COMMANDS = new Set([
-    "setup", "help", "wizard", "config", "ping", "botinfo", "serverinfo", "eval",
-    "kick", "ban", "unban", "mute", "unmute", "warn", "purge", "lock", "unlock",
-    "slowmode", "jail", "unjail", "supabasestatus", "database", "database-sync",
-    "play", "pause", "resume", "skip", "stop", "queue", "nowplaying", "np", "equalizer", "eq", "volume",
-  ]);
-
-  if (!isOwnerOrAdmin && !BYPASS_SETUP_COMMANDS.has(matchedCommand.data.name) && !isSetupUnlocked(cfg)) {
-    const { EmbedBuilder } = await import("discord.js");
-    await message.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(`${CE.warning.str} Server Setup Required`)
-          .setColor(0xfee75c)
-          .setDescription(
-            `Normal command usage is restricted until a server administrator runs the \`.wizard\` or \`/setup\` onboarding wizard.\n\n` +
-            `Run \`.wizard\` / \`.wizard all\` / \`/setup\` or click **⚡ 1-Click Auto Setup** in \`/config\` to configure all roles automatically!`
-          )
-      ]
-    }).catch(() => {});
     return true;
   }
 

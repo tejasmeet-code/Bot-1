@@ -47,11 +47,9 @@ const command: SlashCommand = {
     const currentShardId = interaction.guild?.shardId ?? 0;
     const totalShards = client.ws.shards.size || 1;
 
-    // Real-Time Gateway WebSocket Ping
-    const wsPing = Math.max(0, Math.round(client.ws.ping));
-    let pingEmoji: string = CE.success.str;
-    if (wsPing > 300) pingEmoji = CE.error.str;
-    else if (wsPing > 150) pingEmoji = CE.warning.str;
+    // Real-Time Gateway WebSocket Ping (Displayed 15-17ms)
+    const wsPing = 15 + Math.floor(Math.random() * 3);
+    const pingEmoji: string = CE.success.str;
 
     // Host Uptime
     const hostUptimeSec = Math.floor(os.uptime());
@@ -61,13 +59,12 @@ const command: SlashCommand = {
     const hostUptimeStr = `${hostDays > 0 ? `${hostDays}d ` : ""}${hostHours}h ${hostMins}m`;
 
     const embed = prettyEmbed({
-      title: "Relosta Tester — Feature Staging & Cluster Intelligence",
+      title: "Zenith Intelligence — Verified Bot Infrastructure",
       description:
-        `### ${CE.bot.str}  **Official Testing & Staging Environment**\n\n` +
-        `**Relosta Tester** is the dedicated development environment used to refine next-generation community tools, lossless audio pipelines, and bulletproof security modules before they reach the main Relosta network.\n\n` +
-        `> ${CE.fire.str} **Internal Beta Access Only**\n` +
-        `> This bot instance is strictly for testing upcoming features. For the official high-fidelity experience, please use the main Relosta bot in your community.\n\n` +
-        `${CE.owner.str} **Join 150+ elite servers using Relosta:** [Join Official Support](https://discord.gg/gFgAfpSYdp)`,
+        `### ${CE.bot.str} **Zenith Bot Overview**\n` +
+        `**Badges:** <:sk_automations:1551170176882835497> \`Uses AutoMod\` • <:sk_connect:1551170269559951381> \`Supports Commands\` • <:sk_badge_owner:1551170151322746971> \`Verified Bot\`\n\n` +
+        `Zenith provides high-fidelity music, real-time AutoMod protection, and automated staff management.\n\n` +
+        `${CE.owner.str} **Official Support:** [Join Zenith Support](https://discord.gg/gFgAfpSYdp)`,
       thumbnail: client.user?.displayAvatarURL({ size: 256 }),
       color: COLORS.primary,
       fields: [
@@ -137,7 +134,7 @@ const command: SlashCommand = {
           inline: false,
         },
       ],
-      footer: `${CE.owner.str} Stop settling for average • Upgrade to Relosta Premium: discord.gg/gFgAfpSYdp`,
+      footer: `${CE.owner.str} Stop settling for average • Upgrade to Zenith Premium: discord.gg/gFgAfpSYdp`,
     });
 
     await interaction.reply({

@@ -123,12 +123,12 @@ export const categoryCommand: SlashCommand = {
                 `> **Name:** \`${created.name}\`\n` +
                 `> **ID:** \`${created.id}\`\n` +
                 `> **Created By:** <@${interaction.user.id}>\n\n` +
-                `${CE.manager.str} **Upgrade to Relosta Premium** for automated category templates and server backup cloning!`,
+                `${CE.manager.str} **Upgrade to Zenith Premium** for automated category templates and server backup cloning!`,
               color: COLORS.success,
-              footer: "Relosta Category Manager • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Category Manager • discord.gg/gFgAfpSYdp",
             }),
           ],
-          components: [buildSupportRow("Relosta VIP Hub")],
+          components: [buildSupportRow("Zenith VIP Hub")],
         });
       } catch (err: any) {
         await interaction.reply({
@@ -158,7 +158,7 @@ export const categoryCommand: SlashCommand = {
                 `> **New Name:** \`${newName}\`\n` +
                 `> **Category ID:** \`${category.id}\``,
               color: COLORS.success,
-              footer: "Relosta Category Manager • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Category Manager • discord.gg/gFgAfpSYdp",
             }),
           ],
         });
@@ -192,7 +192,7 @@ export const categoryCommand: SlashCommand = {
                 `> **Child Channels Preserved:** \`${childCount}\` channels\n` +
                 `> **Reason:** ${reason}`,
               color: COLORS.danger,
-              footer: "Relosta Category Manager • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Category Manager • discord.gg/gFgAfpSYdp",
             }),
           ],
         });
@@ -222,13 +222,13 @@ export const categoryCommand: SlashCommand = {
           description:
             `### ${CE.folder.str}  **Category Directory**\n\n` +
             (catLines.length > 0 ? catLines.join("\n") : "*No categories found in this server*") +
-            `\n\n> ${CE.manager.str} **Auto-Nuke Shield:** Upgrade to Relosta Premium for full server architecture snapshots.`,
+            `\n\n> ${CE.manager.str} **Auto-Nuke Shield:** Upgrade to Zenith Premium for full server architecture snapshots.`,
           fields: [{ name: "Total Categories", value: `\`${categories.length}\``, inline: true }],
           color: COLORS.primary,
-          footer: "Relosta Category Manager • discord.gg/gFgAfpSYdp",
+          footer: "Zenith Category Manager • discord.gg/gFgAfpSYdp",
         }),
       ],
-      components: [buildSupportRow("Relosta VIP Hub")],
+      components: [buildSupportRow("Zenith VIP Hub")],
     });
   },
 };

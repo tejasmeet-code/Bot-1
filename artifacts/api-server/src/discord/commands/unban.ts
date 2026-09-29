@@ -109,7 +109,7 @@ const command: SlashCommand = {
             ])}`,
             thumbnail: ban.user.displayAvatarURL({ size: 256 }),
             color: COLORS.success,
-            footer: caseNumber ? `Case #${caseNumber} • Relosta Bot` : "Relosta Bot",
+            footer: caseNumber ? `Case #${caseNumber} • Zenith Bot` : "Zenith Bot",
           })],
         }).catch(() => {});
       }

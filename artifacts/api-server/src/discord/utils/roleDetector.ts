@@ -2,21 +2,21 @@ import {
   type Guild,
   type Role,
   PermissionFlagsBits,
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  RoleSelectMenuBuilder,
 } from "discord.js";
-import { CE } from "./embedStyle";
 
 export interface SmartRoleDetectionResult {
+  ownerRole: Role | null;
+  adminRole: Role | null;
+  modRole: Role | null;
   mainMemberRole: Role | null;
   mainMemberCandidates: Role[];
   staffCommonRole: Role | null;
   staffCommonCandidates: Role[];
   staffHierarchy: Role[];
   allValidRoles: Role[];
+  botHighestRole: Role | null;
+  isBotRoleHighEnough: boolean;
+  botRoleWarning?: string;
 }
 
 /**
@@ -98,6 +98,42 @@ const STAFF_KEYWORDS = [
   "founder",
   "director",
   "executive",
+];
+
+const OWNER_KEYWORDS = [
+  "owner",
+  "co owner",
+  "server owner",
+  "founder",
+  "co founder",
+  "director",
+  "executive",
+  "ceo",
+  "head owner",
+  "creator",
+];
+
+const ADMIN_KEYWORDS = [
+  "admin",
+  "administrator",
+  "administrators",
+  "admins",
+  "head admin",
+  "senior admin",
+  "management",
+  "manager",
+  "lead",
+];
+
+const MOD_KEYWORDS = [
+  "moderator",
+  "moderators",
+  "mod",
+  "mods",
+  "senior mod",
+  "junior mod",
+  "trial mod",
+  "staff mod",
 ];
 
 /**
@@ -183,7 +219,7 @@ export function scoreStaffRole(role: Role): number {
 
 /**
  * Performs deep, intelligent scanning of all server roles to auto-detect
- * Member Roles, Staff Common Roles, and Staff Hierarchy in order.
+ * Owner Role, Admin Role, Mod Role, Member Roles, Staff Common Roles, and Staff Hierarchy in order.
  */
 export async function detectSmartRoles(guild: Guild): Promise<SmartRoleDetectionResult> {
   await guild.roles.fetch().catch(() => {});
@@ -209,7 +245,51 @@ export async function detectSmartRoles(guild: Guild): Promise<SmartRoleDetection
     .sort((a, b) => b.score - a.score)
     .map((item) => item.role);
 
-  // For Staff Common Role, prefer a generic role like "Staff Team" or "Staff" or "Moderators"
+  // Detect Owner Role
+  let ownerRole: Role | null = null;
+  for (const r of staffCandidates) {
+    const clean = cleanRoleName(r.name);
+    if (OWNER_KEYWORDS.some((kw) => clean === kw || clean.includes(kw))) {
+      ownerRole = r;
+      break;
+    }
+  }
+  if (!ownerRole) {
+    // If not by keyword, check the guild owner's highest valid role
+    const ownerMember = guild.members.cache.get(guild.ownerId);
+    if (ownerMember) {
+      const highestOwnerRole = ownerMember.roles.cache
+        .filter(isValidAssignableRole)
+        .sort((a, b) => b.position - a.position)
+        .first();
+      if (highestOwnerRole) ownerRole = highestOwnerRole;
+    }
+  }
+
+  // Detect Admin Role
+  let adminRole: Role | null = null;
+  for (const r of staffCandidates) {
+    if (ownerRole && r.id === ownerRole.id) continue;
+    const clean = cleanRoleName(r.name);
+    if (ADMIN_KEYWORDS.some((kw) => clean === kw || clean.includes(kw)) || r.permissions.has(PermissionFlagsBits.Administrator)) {
+      adminRole = r;
+      break;
+    }
+  }
+
+  // Detect Mod Role
+  let modRole: Role | null = null;
+  for (const r of staffCandidates) {
+    if (ownerRole && r.id === ownerRole.id) continue;
+    if (adminRole && r.id === adminRole.id) continue;
+    const clean = cleanRoleName(r.name);
+    if (MOD_KEYWORDS.some((kw) => clean === kw || clean.includes(kw))) {
+      modRole = r;
+      break;
+    }
+  }
+
+  // Staff Common Role
   let staffCommonRole: Role | null = null;
   const commonKeywords = ["staff team", "staff", "staffs", "team staff", "moderators", "moderator", "mod team", "team"];
   for (const cand of staffCandidates) {
@@ -226,12 +306,33 @@ export async function detectSmartRoles(guild: Guild): Promise<SmartRoleDetection
   // 3. Build Staff Hierarchy (Ranked from Highest Discord Position down to Lowest)
   const staffHierarchy = [...staffCandidates].sort((a, b) => b.position - a.position);
 
+  // 4. Bot Role Position & Security Wall Verification
+  const botMember = guild.members.me;
+  const botHighestRole = botMember?.roles.highest || null;
+  let isBotRoleHighEnough = true;
+  let botRoleWarning: string | undefined;
+
+  if (botHighestRole) {
+    const adminOrStaffRoles = [adminRole, modRole, staffCommonRole, ...staffHierarchy.slice(0, 3)].filter(Boolean) as Role[];
+    const higherRoles = adminOrStaffRoles.filter((r) => r.position >= botHighestRole.position);
+    if (higherRoles.length > 0) {
+      isBotRoleHighEnough = false;
+      botRoleWarning = `Bot role <@&${botHighestRole.id}> is below ${higherRoles.map((r) => `<@&${r.id}>`).join(", ")}. Drag the bot role higher in Server Settings > Roles so Anti-Nuke Security Walls can enforce punishments!`;
+    }
+  }
+
   return {
+    ownerRole,
+    adminRole,
+    modRole,
     mainMemberRole,
     mainMemberCandidates: memberCandidates,
     staffCommonRole,
     staffCommonCandidates: staffCandidates,
     staffHierarchy,
     allValidRoles: validRoles,
+    botHighestRole,
+    isBotRoleHighEnough,
+    botRoleWarning,
   };
 }

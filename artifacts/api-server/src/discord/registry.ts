@@ -2,6 +2,8 @@ import type { SlashCommand } from "./types";
 import afk from "./commands/afk";
 import adduser from "./commands/adduser";
 import aiAdmin from "./commands/ai-admin";
+import bugreport from "./commands/bugreport";
+import badges from "./commands/badges";
 import botCheck from "./commands/bot-check";
 import announce from "./commands/announce";
 import automod from "./commands/automod";
@@ -38,7 +40,6 @@ import guess from "./commands/guess";
 import hangman from "./commands/hangman";
 import help from "./commands/help";
 import higherlower from "./commands/higherlower";
-import highfi from "./commands/highfi";
 import infraction from "./commands/infraction";
 import infractions from "./commands/infractions";
 import jail from "./commands/jail";
@@ -52,11 +53,10 @@ import modstats from "./commands/modstats";
 import mute from "./commands/mute";
 import nickname from "./commands/nickname";
 import note from "./commands/note";
-import nuke from "./commands/nuke";
-import nukeAntiWhitelist from "./commands/nukeAntiWhitelist";
 import partnershipScore from "./commands/partnership-score";
 import partnership from "./commands/partnership";
 import ping from "./commands/ping";
+import oping from "./commands/oping";
 import poll from "./commands/poll";
 import postProof from "./commands/post-proof";
 import preset from "./commands/preset";
@@ -185,10 +185,16 @@ import { channelCommand } from "./commands/channel";
 import { categoryCommand } from "./commands/category";
 import { emojiCommand } from "./commands/emoji";
 import { stickerCommand } from "./commands/sticker";
+import { botavatarCommand } from "./commands/botavatar";
+import { gbotavatarCommand } from "./commands/gbotavatar";
+import { botStatusCommands } from "./commands/botstatus";
 
 const allCommands: SlashCommand[] = [
   // ── Critical & Newest Features (always top priority for slash commands) ──
   setupWizardCommand,
+  ...botStatusCommands,
+  botavatarCommand,
+  gbotavatarCommand,
   roleCommand,
   channelCommand,
   categoryCommand,
@@ -203,15 +209,11 @@ const allCommands: SlashCommand[] = [
   serverAdminCommand,
   trustedCommand,
   premiumCommand,
-  premiumPanelCommand,
-  premiumCheckCommand,
-  premiumGiveCommand,
-  premiumUserCommand,
-  premiumServerCommand,
-  premiumGenerateCommand,
   profileCommand,
   setbioCommand,
   noprefixCommand,
+  bugreport,
+  badges,
   ginfoCommand,
   checkstaffCommand,
   sourceCommand,
@@ -293,10 +295,10 @@ const allCommands: SlashCommand[] = [
   leaderboard,
   giveXp,
   ping,
+  oping,
   botinfo,
   serverinfo,
   userinfo,
-  profileCommand,
   avatar,
   dm,
   poll,
@@ -304,7 +306,6 @@ const allCommands: SlashCommand[] = [
   roleremove,
   roleinfo,
   note,
-  nuke,
   connectServers,
   automations,
   globalBackup,
@@ -331,11 +332,9 @@ const allCommands: SlashCommand[] = [
   guess,
   hangman,
   higherlower,
-  highfi,
   intro,
   meme,
   nickname,
-  nukeAntiWhitelist,
   partnershipScore,
   postProof,
   preset,
@@ -441,7 +440,6 @@ const REGISTRATION_EXCLUDED_COMMAND_NAMES = new Set([
   "close-ticket",
   "private-ticket",
   "edit-case",
-  "nuke-anti-whitelist",
   "post-proof",
   "preset",
   "pullable",
@@ -494,6 +492,41 @@ const REGISTRATION_EXCLUDED_COMMAND_NAMES = new Set([
   "pause",
   "resume",
   "skip",
+  "seek",
+  "skipto",
+  "remove",
+  "move",
+  "music-panel",
+  "bassboost",
+  // Sub-premium aliases (handled under /premium)
+  "premium-user",
+  "premium-server",
+  "premium-generate",
+  "premium-give",
+  "premium-panel",
+  "premium-check",
+  // Secondary admin & info utilities (prefix & no-prefix accessible, excluded from 100 slash limit)
+  "notes",
+  "infraction",
+  "infractions",
+  "jail",
+  "unjail",
+  "slowmode",
+  "nickname",
+  "topic",
+  "auditlog",
+  "invite",
+  "avatar",
+  "banner",
+  "userinfo",
+  "serverinfo",
+  "roles",
+  "emojis",
+  "stickers",
+  "give-xp",
+  "automations",
+  "response-channel",
+  "ai-admin",
   // Owner diagnostic & management tools (prefix executable, excluded from 100 limit)
   "eval",
   "supabasestatus",

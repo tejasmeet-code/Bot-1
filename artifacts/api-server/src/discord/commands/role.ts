@@ -162,12 +162,12 @@ export const roleCommand: SlashCommand = {
                 `> **Color:** \`${newRole.hexColor}\`\n` +
                 `> **Displayed Separately:** ${newRole.hoist ? `${CE.check.str} Yes` : "No"}\n` +
                 `> **Mentionable:** ${newRole.mentionable ? `${CE.check.str} Yes` : "No"}\n\n` +
-                `${CE.manager.str} **Upgrade to Relosta Premium** for automated auto-roles, reaction-roles & instant anti-nuke role backups!`,
+                `${CE.manager.str} **Upgrade to Zenith Premium** for automated auto-roles, reaction-roles & instant anti-nuke role backups!`,
               color: newRole.color || COLORS.success,
-              footer: "Relosta Role Manager • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Role Manager • discord.gg/gFgAfpSYdp",
             }),
           ],
-          components: [buildSupportRow("Relosta VIP Hub")],
+          components: [buildSupportRow("Zenith VIP Hub")],
         });
       } catch (err: any) {
         await interaction.reply({
@@ -273,7 +273,7 @@ export const roleCommand: SlashCommand = {
                 `> **Displayed Separately:** ${updated.hoist ? `${CE.check.str} Yes` : "No"}\n` +
                 `> **Mentionable:** ${updated.mentionable ? `${CE.check.str} Yes` : "No"}`,
               color: updated.color || COLORS.success,
-              footer: "Relosta Role Manager • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Role Manager • discord.gg/gFgAfpSYdp",
             }),
           ],
         });
@@ -339,7 +339,7 @@ export const roleCommand: SlashCommand = {
                 `> **Role ID:** \`${roleId}\`\n` +
                 `> **Reason:** ${reason}`,
               color: COLORS.danger,
-              footer: "Relosta Role Manager • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Role Manager • discord.gg/gFgAfpSYdp",
             }),
           ],
         });
@@ -397,7 +397,7 @@ export const roleCommand: SlashCommand = {
                 `> **Role:** <@&${role.id}>\n` +
                 `> **Moderator:** <@${interaction.user.id}>`,
               color: role.color || COLORS.success,
-              footer: "Relosta Role Manager • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Role Manager • discord.gg/gFgAfpSYdp",
             }),
           ],
         });
@@ -449,7 +449,7 @@ export const roleCommand: SlashCommand = {
                 `> **Role:** <@&${role.id}>\n` +
                 `> **Moderator:** <@${interaction.user.id}>`,
               color: COLORS.danger,
-              footer: "Relosta Role Manager • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Role Manager • discord.gg/gFgAfpSYdp",
             }),
           ],
         });
@@ -485,16 +485,16 @@ export const roleCommand: SlashCommand = {
           description:
             `### ${CE.moderation.str}  **Role Directory**\n\n` +
             (listLines.length > 0 ? listLines.join("\n") : "*No roles found on this page*") +
-            `\n\n> ${CE.manager.str} **Protect your server:** Unlock **Relosta God-Mode Anti-Nuke** with instant role deletion prevention and auto-recovery.`,
+            `\n\n> ${CE.manager.str} **Protect your server:** Unlock **Zenith God-Mode Anti-Nuke** with instant role deletion prevention and auto-recovery.`,
           fields: [
             { name: "Total Roles", value: `\`${allRoles.length}\``, inline: true },
             { name: "Current Page", value: `\`${page} / ${totalPages}\``, inline: true },
           ],
           color: COLORS.primary,
-          footer: `Page ${page} of ${totalPages} • Relosta Role Manager • discord.gg/gFgAfpSYdp`,
+          footer: `Page ${page} of ${totalPages} • Zenith Role Manager • discord.gg/gFgAfpSYdp`,
         }),
       ],
-      components: [buildSupportRow("Relosta VIP Hub")],
+      components: [buildSupportRow("Zenith VIP Hub")],
     });
   },
 };

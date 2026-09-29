@@ -239,4 +239,18 @@ async function resolveMainGuild(
   return { guild: mainGuild, label: `main (${mainGuild.name})` };
 }
 
+export const sprofileCommand: SlashCommand = {
+  data: new SlashCommandBuilder()
+    .setName("sprofile")
+    .setDescription("View staff profile: promotions, demotions, join date, main-server modstats & messages.")
+    .setDMPermission(false)
+    .addUserOption((o) =>
+      o
+        .setName("user")
+        .setDescription("Staff member (defaults to you)")
+        .setRequired(false),
+    ),
+  execute: command.execute,
+};
+
 export default command;

@@ -57,7 +57,7 @@ const command: SlashCommand = {
             ...(c.proof ? [{ label: "Proof", value: c.proof }] : []),
           ]),
           color: ACTION_COLORS[c.action] ?? COLORS.neutral,
-          footer: `Created ${new Date(c.created_at).toUTCString()} • Case #${c.case_number} • Relosta Bot`,
+          footer: `Created ${new Date(c.created_at).toUTCString()} • Case #${c.case_number} • Zenith Bot`,
         })],
       });
 
@@ -77,7 +77,7 @@ const command: SlashCommand = {
           description: lines.join("\n"),
           thumbnail: target.displayAvatarURL({ size: 256 }),
           color: COLORS.info,
-          footer: `${cases.length} total • showing ${Math.min(cases.length, 20)} • Relosta Bot`,
+          footer: `${cases.length} total • showing ${Math.min(cases.length, 20)} • Zenith Bot`,
         })],
       });
     }

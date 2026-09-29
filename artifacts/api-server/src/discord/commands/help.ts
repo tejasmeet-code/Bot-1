@@ -18,15 +18,15 @@ import { getGuildConfig } from "../storage/config";
 const SUPPORT_SERVER_URL = "https://discord.gg/gFgAfpSYdp";
 
 const CATEGORIES: { id: string; label: string; emoji: string; desc: string; commands: string[] }[] = [
-  { id: "overview", label: "Overview & Help", emoji: CE.information.str, desc: "Main menu", commands: [] },
-  { id: "premium", label: "Premium Tier & Features", emoji: CE.cash.str, desc: "Premium perks, NLP No-Prefix routing, license codes", commands: ["premium-user", "premium-server", "auto-react", "afk"] },
-  { id: "setup", label: "Setup Guide", emoji: CE.settings.str, desc: "How to setup the bot and role hierarchy", commands: ["setup"] },
-  { id: "faq", label: "FAQ", emoji: CE.clipboard.str, desc: "Frequently Asked Questions", commands: [] },
-  { id: "mod", label: "Moderation", emoji: CE.moderation.str, desc: "Tools to keep your server safe", commands: ["ban", "kick", "mute", "unmute", "warn", "unwarn", "timeout", "untimeout", "jail", "unjail", "case", "edit-case", "modhistory", "purge", "lock", "unlock", "slowmode", "nuke", "appeal"] },
-  { id: "staff", label: "Staff & Admin", emoji: CE.admin.str, desc: "Server configuration and staff tracking", commands: ["config", "bot-admin", "ai-admin", "loa", "staff-report", "promote", "demote", "staff-roles", "bot-check", "maintenance", "whitelist", "bot-admins", "verify-owner", "setup", "globalautoreact", "botstaff", "botwhitelist"] },
-  { id: "economy", label: "Economy & Levels", emoji: CE.cash.str, desc: "Ranks, shop, and currency", commands: ["rank", "leaderboard", "give-xp", "slots"] },
-  { id: "fun", label: "Fun & Games", emoji: CE.giveaway.str, desc: "Games, minigames, and fun commands", commands: ["8ball", "coinflip", "roll", "rps", "tictactoe", "connect4", "hangman", "trivia", "wouldyourather", "wordscramble", "meme", "ship", "spooky", "guess", "higherlower", "russianroulette"] },
-  { id: "utility", label: "Utility & Info", emoji: CE.information.str, desc: "Useful tools and information", commands: ["help", "ping", "serverinfo", "userinfo", "botinfo", "roleinfo", "avatar", "setavatar", "servercount", "poll", "announce", "dm", "note", "pull", "giveaway", "staff-database", "afk"] },
+  { id: "overview", label: "Overview & Help", emoji: CE.information.id, desc: "Main menu", commands: [] },
+  { id: "premium", label: "Premium Tier & Features", emoji: CE.cash.id, desc: "Premium perks, NLP No-Prefix routing, license codes", commands: ["premium-user", "premium-server", "auto-react", "afk"] },
+  { id: "setup", label: "Setup Guide", emoji: CE.settings.id, desc: "How to setup the bot and role hierarchy", commands: ["setup"] },
+  { id: "faq", label: "FAQ", emoji: CE.clipboard.id, desc: "Frequently Asked Questions", commands: [] },
+  { id: "mod", label: "Moderation", emoji: CE.moderation.id, desc: "Tools to keep your server safe", commands: ["ban", "kick", "mute", "unmute", "warn", "unwarn", "timeout", "untimeout", "jail", "unjail", "case", "edit-case", "modhistory", "purge", "lock", "unlock", "slowmode", "nuke", "appeal"] },
+  { id: "staff", label: "Staff & Admin", emoji: CE.admin.id, desc: "Server configuration and staff tracking", commands: ["config", "bot-admin", "ai-admin", "loa", "staff-report", "promote", "demote", "staff-roles", "bot-check", "maintenance", "whitelist", "bot-admins", "verify-owner", "setup", "globalautoreact", "botstaff", "botwhitelist"] },
+  { id: "economy", label: "Economy & Levels", emoji: CE.cash.id, desc: "Ranks, shop, and currency", commands: ["rank", "leaderboard", "give-xp", "slots"] },
+  { id: "fun", label: "Fun & Games", emoji: CE.giveaway.id, desc: "Games, minigames, and fun commands", commands: ["8ball", "coinflip", "roll", "rps", "tictactoe", "connect4", "hangman", "trivia", "wouldyourather", "wordscramble", "meme", "ship", "spooky", "guess", "higherlower", "russianroulette"] },
+  { id: "utility", label: "Utility & Info", emoji: CE.information.id, desc: "Useful tools and information", commands: ["help", "ping", "serverinfo", "userinfo", "botinfo", "roleinfo", "avatar", "setavatar", "servercount", "poll", "announce", "dm", "note", "pull", "giveaway", "staff-database", "afk"] },
 ];
 
 const command: SlashCommand = {
@@ -36,6 +36,9 @@ const command: SlashCommand = {
 
   async execute(interaction: ChatInputCommandInteraction) {
     await interaction.deferReply();
+
+    const { getCommandModesMap } = await import("../storage/botStatusState");
+    const commandModes = await getCommandModesMap();
 
     const allCommands = getGuildCommands();
     
@@ -68,17 +71,17 @@ const command: SlashCommand = {
       
       if (categoryId === "overview") {
         return prettyEmbed({
-          title: "Relosta Tester • Feature Staging & Systems Hub",
+          title: "Zenith Tester • Feature Staging & Systems Hub",
           description:
             `### ${CE.bot.str}  **Official Testing & Staging Environment**\n\n` +
-            `This instance is used to test and refine the Relosta Bot ecosystem before production deployment.\n\n` +
+            `This instance is used to test and refine the Zenith Bot ecosystem before production deployment.\n\n` +
             `**${CE.folder.str}  Command Categories**\n` +
-            `> Browse through Relosta's feature categories in the dropdown below to explore commands.\n\n` +
+            `> Browse through Zenith's feature categories in the dropdown below to explore commands.\n\n` +
             `**${CE.information.str}  Frequently Asked Questions**\n` +
             `> Solutions and quick tips for server owners and administrators.\n\n` +
             `**${CE.settings.str}  Initial Server Setup**\n` +
             `> Quick 4-step guide to configure roles, logging channels, and automations.\n\n` +
-            `> ${CE.limited.str} **Upgrade to Relosta Premium:** Stop dealing with raids and bot lag. Unlock 24/7 dedicated voice nodes, God-Mode Anti-Nuke, and No-Prefix commands!\n` +
+            `> ${CE.limited.str} **Upgrade to Zenith Premium:** Stop dealing with raids and bot lag. Unlock 24/7 dedicated voice nodes, God-Mode Anti-Nuke, and No-Prefix commands!\n` +
             `> ${CE.link.str} **[Join Official Support & Claim VIP Pass](https://discord.gg/gFgAfpSYdp)**`,
           thumbnail: interaction.client.user?.displayAvatarURL() || undefined,
           color: COLORS.primary,
@@ -87,14 +90,14 @@ const command: SlashCommand = {
 
       if (categoryId === "setup") {
         return prettyEmbed({
-          title: "Relosta Bot — Server Setup Guide",
+          title: "Zenith Bot — Server Setup Guide",
           description:
             `### ${CE.settings.str}  **Quick Setup Walkthrough**\n\n` +
-            `Follow these essential steps to configure Relosta for maximum security:\n\n` +
+            `Follow these essential steps to configure Zenith for maximum security:\n\n` +
             `**1. Configuration Dashboard**\n` +
             `> Run </config:0> to open the interactive panel. Configure logging channels, staff roles, and punishment presets.\n\n` +
             `**2. Role Hierarchy Placement**\n` +
-            `> In Server Settings -> Roles, drag **Relosta Bot** above all regular member and staff roles.\n\n` +
+            `> In Server Settings -> Roles, drag **Zenith Bot** above all regular member and staff roles.\n\n` +
             `**3. Staff Authorization**\n` +
             `> Set your Moderator and Administrator roles in </config:0> so trusted staff can run commands.\n\n` +
             `**4. Anti-Nuke & AutoMod Shields**\n` +
@@ -106,7 +109,7 @@ const command: SlashCommand = {
 
       if (categoryId === "faq") {
         return prettyEmbed({
-          title: "Relosta Bot — Frequently Asked Questions",
+          title: "Zenith Bot — Frequently Asked Questions",
           description:
             `### ${CE.clipboard.str}  **Frequently Asked Questions**\n\n` +
             `**Q: Why is the bot saying "Interaction Failed"?**\n` +
@@ -116,7 +119,7 @@ const command: SlashCommand = {
             `**Q: How do I backup my server?**\n` +
             `> A: Use </server-backup:0> to create and load backups. Never share private backup IDs publicly!\n\n` +
             `**Q: How do I unlock 24/7 voice and No-Prefix commands?**\n` +
-            `> A: Upgrade to Relosta Premium by visiting our Support Server at [discord.gg/gFgAfpSYdp](https://discord.gg/gFgAfpSYdp).`,
+            `> A: Upgrade to Zenith Premium by visiting our Support Server at [discord.gg/gFgAfpSYdp](https://discord.gg/gFgAfpSYdp).`,
           thumbnail: interaction.client.user?.displayAvatarURL() || undefined,
           color: COLORS.primary,
         });
@@ -124,10 +127,10 @@ const command: SlashCommand = {
 
       if (categoryId === "premium") {
         return prettyEmbed({
-          title: "Relosta Bot — Premium VIP Tier & Perks",
+          title: "Zenith Bot — Premium VIP Tier & Perks",
           description:
             `### ${CE.star.str}  **Take Your Server to the Top Tier**\n\n` +
-            `Tired of bots crashing, laggy music, and server raids? Relosta Premium delivers enterprise reliability with dedicated infrastructure.\n\n` +
+            `Tired of bots crashing, laggy music, and server raids? Zenith Premium delivers enterprise reliability with dedicated infrastructure.\n\n` +
             `**${CE.owner.str} Exclusive Premium Capabilities:**\n` +
             `> • **No-Prefix Command Routing Engine:** Run commands naturally in chat without awkward prefixes (e.g. \`ban @user\` or \`play song\`).\n` +
             `> • **24/7 Always-On VC:** Dedicated voice connection that never disconnects, keeping the music playing 24/7.\n` +
@@ -136,20 +139,31 @@ const command: SlashCommand = {
             `> • **Global AFK Tracking (\`/afk\`):** Cross-server and local status sync with custom triggers.\n\n` +
             `**${CE.limited.str} How to Claim Your VIP License:**\n` +
             `> Licenses are strictly managed to maintain 100% server quality. **Join the Official Support Server and open a VIP ticket:**\n` +
-            `> ${CE.link.str} **[Claim Relosta Premium Today](https://discord.gg/gFgAfpSYdp)**`,
+            `> ${CE.link.str} **[Claim Zenith Premium Today](https://discord.gg/gFgAfpSYdp)**`,
           thumbnail: interaction.client.user?.displayAvatarURL() || undefined,
           color: COLORS.premium,
         });
       }
 
       const cmds = categoryMap.get(categoryId) || [];
+
+      const getBadge = (name: string) => {
+        const mode = commandModes[name.toLowerCase()];
+        if (!mode || mode === "normal") return "";
+        if (mode === "maintenance") return " `<:sk_automations:1551170176882835497> MAINTENANCE`";
+        if (mode === "down") return " `<:sk_ban:1551170098042372179> OFFLINE`";
+        if (mode === "lockdown") return " `<:sk_lock:1551170070384742410> LOCKED`";
+        if (mode === "dev_only") return " `<a:red_developer:1551170144574115930> DEV ONLY`";
+        if (mode === "vip_only") return " `<:sk_badge_premium:1551170158407188490> VIP ONLY`";
+        return "";
+      };
       
       return prettyEmbed({
         title: `${cat?.label || "Command"} Suite`,
         description:
           `### ${cat?.emoji || CE.folder.str}  **${cat?.label || "Category"} Commands**\n\n` +
           (cmds.length > 0 
-            ? cmds.map(c => `> **\`/${c.data.name}\`** — ${c.data.description}`).join("\n")
+            ? cmds.map(c => `> **\`/${c.data.name}\`**${getBadge(c.data.name)} — ${c.data.description}`).join("\n")
             : "> *No commands found in this category.*") +
           `\n\n${CE.limited.str} **Want instant No-Prefix command routing?** Upgrade to Premium at [discord.gg/gFgAfpSYdp](https://discord.gg/gFgAfpSYdp)`,
         color: COLORS.primary,

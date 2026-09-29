@@ -140,13 +140,13 @@ export const emojiCommand: SlashCommand = {
                 `> **ID:** \`${created.id}\`\n` +
                 `> **Animated:** ${created.animated ? "Yes" : "No"}\n` +
                 `> **Added By:** <@${interaction.user.id}>\n\n` +
-                `${CE.manager.str} **Upgrade to Relosta Premium** for unlimited emoji slots, global steal & instant sync across servers!`,
+                `${CE.manager.str} **Upgrade to Zenith Premium** for unlimited emoji slots, global steal & instant sync across servers!`,
               thumbnail: created.url,
               color: COLORS.success,
-              footer: "Relosta Expression Engine • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Expression Engine • discord.gg/gFgAfpSYdp",
             }),
           ],
-          components: [buildSupportRow("Relosta VIP Hub")],
+          components: [buildSupportRow("Zenith VIP Hub")],
         });
       } catch (err: any) {
         if (interaction.deferred || interaction.replied) {
@@ -200,7 +200,7 @@ export const emojiCommand: SlashCommand = {
                 `> **ID:** \`${updated.id}\``,
               color: COLORS.success,
               thumbnail: updated.url,
-              footer: "Relosta Expression Engine • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Expression Engine • discord.gg/gFgAfpSYdp",
             }),
           ],
         });
@@ -249,7 +249,7 @@ export const emojiCommand: SlashCommand = {
                 `> **Reason:** ${reason}`,
               thumbnail: emojiUrl,
               color: COLORS.danger,
-              footer: "Relosta Expression Engine • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Expression Engine • discord.gg/gFgAfpSYdp",
             }),
           ],
         });
@@ -282,17 +282,17 @@ export const emojiCommand: SlashCommand = {
           description:
             `### ${CE.star.str}  **Custom Expressions**\n\n` +
             (emojiLines.length > 0 ? emojiLines.join("\n") : "*No emojis found on this page*") +
-            `\n\n> ${CE.manager.str} **Emoji Anti-Raid:** Guard against mass-emoji deletions with Relosta God-Mode Anti-Nuke.`,
+            `\n\n> ${CE.manager.str} **Emoji Anti-Raid:** Guard against mass-emoji deletions with Zenith God-Mode Anti-Nuke.`,
           fields: [
             { name: "Static Emojis", value: `\`${staticCount}\``, inline: true },
             { name: "Animated Emojis", value: `\`${animatedCount}\``, inline: true },
             { name: "Page", value: `\`${page} / ${totalPages}\``, inline: true },
           ],
           color: COLORS.primary,
-          footer: `Page ${page} of ${totalPages} • Relosta Expression Engine • discord.gg/gFgAfpSYdp`,
+          footer: `Page ${page} of ${totalPages} • Zenith Expression Engine • discord.gg/gFgAfpSYdp`,
         }),
       ],
-      components: [buildSupportRow("Relosta VIP Hub")],
+      components: [buildSupportRow("Zenith VIP Hub")],
     });
   },
 };

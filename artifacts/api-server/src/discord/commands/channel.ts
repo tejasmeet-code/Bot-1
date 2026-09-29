@@ -188,12 +188,12 @@ export const channelCommand: SlashCommand = {
                 `> **Type:** \`${typeStr.toUpperCase()}\`\n` +
                 `> **Category:** ${category ? `<#${category.id}>` : "*None*"}\n` +
                 `> **Topic:** ${topic ? `\`${topic}\`` : "*None*"}\n\n` +
-                `${CE.manager.str} **Upgrade to Relosta Premium** for infinite voice channels, auto-temp channels & instant anti-nuke restoration!`,
+                `${CE.manager.str} **Upgrade to Zenith Premium** for infinite voice channels, auto-temp channels & instant anti-nuke restoration!`,
               color: COLORS.success,
-              footer: "Relosta Channel Manager • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Channel Manager • discord.gg/gFgAfpSYdp",
             }),
           ],
-          components: [buildSupportRow("Relosta VIP Hub")],
+          components: [buildSupportRow("Zenith VIP Hub")],
         });
       } catch (err: any) {
         await interaction.reply({
@@ -251,7 +251,7 @@ export const channelCommand: SlashCommand = {
                 (slowmode !== null ? `> **Slowmode:** \`${slowmode}s\`\n` : "") +
                 (newCategory ? `> **Category:** <#${newCategory.id}>\n` : ""),
               color: COLORS.success,
-              footer: "Relosta Channel Manager • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Channel Manager • discord.gg/gFgAfpSYdp",
             }),
           ],
         });
@@ -284,7 +284,7 @@ export const channelCommand: SlashCommand = {
                 `> **Moderator:** <@${interaction.user.id}>\n` +
                 `> **Reason:** ${reason}`,
               color: COLORS.danger,
-              footer: "Relosta Channel Manager • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Channel Manager • discord.gg/gFgAfpSYdp",
             }),
           ],
         });
@@ -328,16 +328,16 @@ export const channelCommand: SlashCommand = {
           description:
             `### ${CE.clipboard.str}  **Channel Directory**\n\n` +
             (listLines.length > 0 ? listLines.join("\n") : "*No channels found on this page*") +
-            `\n\n> ${CE.manager.str} **Protect your server:** Prevent mass-channel deletion raids with **Relosta God-Mode Anti-Nuke**.`,
+            `\n\n> ${CE.manager.str} **Protect your server:** Prevent mass-channel deletion raids with **Zenith God-Mode Anti-Nuke**.`,
           fields: [
             { name: "Total Channels", value: `\`${channels.length}\``, inline: true },
             { name: "Page", value: `\`${page} / ${totalPages}\``, inline: true },
           ],
           color: COLORS.primary,
-          footer: `Page ${page} of ${totalPages} • Relosta Channel Manager • discord.gg/gFgAfpSYdp`,
+          footer: `Page ${page} of ${totalPages} • Zenith Channel Manager • discord.gg/gFgAfpSYdp`,
         }),
       ],
-      components: [buildSupportRow("Relosta VIP Hub")],
+      components: [buildSupportRow("Zenith VIP Hub")],
     });
   },
 };

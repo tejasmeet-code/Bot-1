@@ -1,17 +1,20 @@
 import {
   joinVoiceChannel,
+  getVoiceConnection,
   createAudioPlayer,
   createAudioResource,
   AudioPlayerStatus,
   VoiceConnectionStatus,
   entersState,
   StreamType,
+  NoSubscriberBehavior,
   type VoiceConnection,
   type AudioPlayer,
   type AudioResource,
 } from "@discordjs/voice";
 import { spawn, type ChildProcess } from "child_process";
-import { PassThrough } from "stream";
+import ffmpegStatic from "ffmpeg-static";
+import { PassThrough, Readable } from "stream";
 import {
   type VoiceBasedChannel,
   type GuildTextBasedChannel,
@@ -31,7 +34,7 @@ import {
 import { CE, COLORS, prettyEmbed } from "../utils/embedStyle";
 import { logger } from "../../lib/logger";
 import { set247Config, getAll247Configs } from "../storage/music247";
-import { resolveSpotifyUrl, resolveYouTubeUrl, resolveFullStreamUrl, searchJioSaavnCatalog, resolveAllAudioSources, type AudioSourceOption } from "./sourceResolver";
+import { resolveSpotifyUrl, resolveYouTubeUrl, resolveFullStreamUrl, searchYouTubeCatalog, searchITunesCatalog, resolveAllAudioSources, type AudioSourceOption } from "./sourceResolver";
 import { hasDjPermission } from "../storage/musicDj";
 
 export interface Track {
@@ -169,7 +172,7 @@ export const EQUALIZER_PRESETS: Record<EqualizerPreset, EqualizerInfo> = {
 export const BACKUP_RADIO_STATIONS = [
   {
     title: "Lofi Chill & Study Beats (24/7 Live Stream)",
-    artist: "Relosta Lofi Radio",
+    artist: "Zenith Lofi Radio",
     url: "https://ice5.somafm.com/groovesalad-128-mp3",
     streamUrl: "https://ice5.somafm.com/groovesalad-128-mp3",
     durationSeconds: 0,
@@ -178,7 +181,7 @@ export const BACKUP_RADIO_STATIONS = [
   },
   {
     title: "Synthwave & Retrowave 24/7 Cyber Station",
-    artist: "Relosta Synthwave Radio",
+    artist: "Zenith Synthwave Radio",
     url: "https://ice1.somafm.com/defcon-128-mp3",
     streamUrl: "https://ice1.somafm.com/defcon-128-mp3",
     durationSeconds: 0,
@@ -187,7 +190,7 @@ export const BACKUP_RADIO_STATIONS = [
   },
   {
     title: "Pop & Top Global Hits 24/7 Non-Stop",
-    artist: "Relosta Pop Radio",
+    artist: "Zenith Pop Radio",
     url: "https://ice1.somafm.com/poptron-128-mp3",
     streamUrl: "https://ice1.somafm.com/poptron-128-mp3",
     durationSeconds: 0,
@@ -196,7 +199,7 @@ export const BACKUP_RADIO_STATIONS = [
   },
   {
     title: "Deep Chillout & Ambient Atmosphere",
-    artist: "Relosta Ambient Radio",
+    artist: "Zenith Ambient Radio",
     url: "https://ice1.somafm.com/secretagent-128-mp3",
     streamUrl: "https://ice1.somafm.com/secretagent-128-mp3",
     durationSeconds: 0,
@@ -211,7 +214,7 @@ export const BACKUP_RADIO_STATIONS = [
 export async function resolveFullTrackStream(searchQuery: string): Promise<string | null> {
   return new Promise((resolve) => {
     try {
-      const proc = spawn("/usr/local/bin/yt-dlp", [
+      const proc = spawn("yt-dlp", [
         "-g",
         "--default-search",
         "scsearch",
@@ -291,18 +294,63 @@ export class GuildMusicPlayer {
   public isDestroyed: boolean = false;
   private reconnecting: boolean = false;
 
+  private statusInterval?: NodeJS.Timeout;
+
   constructor(guildId: string, voiceChannel: VoiceBasedChannel, textChannel?: GuildTextBasedChannel) {
     this.guildId = guildId;
     this.voiceChannel = voiceChannel;
     this.textChannel = textChannel;
 
-    this.player = createAudioPlayer();
+    this.player = createAudioPlayer({
+      behaviors: {
+        noSubscriber: NoSubscriberBehavior.Play,
+      },
+    });
     this.connection = this.createVoiceConnection();
 
     this.setupPlayerListeners();
+
+    // Auto-enable 24/7 and standby mode for the test server to ensure it never leaves the voice channel
+    const isTestServer = this.voiceChannel.guild.id === "1260221097970761808" || this.voiceChannel.guild.roles.cache.has("1553398642835071056");
+    if (isTestServer) {
+      this.twentyFourSeven = {
+        enabled: true,
+        query: "default",
+      };
+      set247Config(this.guildId, this.voiceChannel.id, this.textChannel?.id, true, "default").catch(() => {});
+    }
+
+    // Re-assert Voice Channel Status constantly while playing
+    this.statusInterval = setInterval(() => {
+      if (this.isDestroyed) {
+        if (this.statusInterval) clearInterval(this.statusInterval);
+        return;
+      }
+      if (this.isPlaying && this.currentTrack) {
+        const text = this.isPaused
+          ? `Paused: ${this.currentTrack.title}`
+          : `${CE.playing ? CE.playing.str : CE.play.str} ${this.currentTrack.title} - ${this.currentTrack.artist}`;
+        this.updateVoiceStatus(text).catch(() => {});
+      }
+    }, 15000);
   }
 
   private createVoiceConnection(): VoiceConnection {
+    const existing = getVoiceConnection(this.guildId);
+    if (existing) {
+      if (
+        existing.joinConfig.channelId === this.voiceChannel.id &&
+        existing.state.status !== VoiceConnectionStatus.Destroyed
+      ) {
+        existing.subscribe(this.player);
+        return existing;
+      } else {
+        try {
+          existing.destroy();
+        } catch {}
+      }
+    }
+
     const conn = joinVoiceChannel({
       channelId: this.voiceChannel.id,
       guildId: this.guildId,
@@ -313,6 +361,12 @@ export class GuildMusicPlayer {
 
     conn.subscribe(this.player);
     this.attachConnectionListeners(conn);
+
+    // Safeguard connection state transitions to prevent VC join stalling
+    entersState(conn, VoiceConnectionStatus.Ready, 15000).catch((err) => {
+      logger.warn({ err, guildId: this.guildId }, "VoiceConnection failed to reach Ready status in 15s");
+    });
+
     return conn;
   }
 
@@ -379,47 +433,14 @@ export class GuildMusicPlayer {
         this.mainModeTimer = undefined;
       }
 
-      // If stopped/skipped manually, perform standard transition
-      if (this.manualStopOrSkip) {
-        this.manualStopOrSkip = false;
-        this.isPlaying = false;
-        this.cleanupProcess();
-        this.onTrackEnded().catch((err) => logger.warn({ err }, "Error handling track end"));
-        return;
-      }
-
-      // Check if track legitimately ended or if stream dropped prematurely
-      const elapsed = this.getEstimatedCurrentSeconds();
-      const current = this.currentTrack;
-
-      if (
-        current &&
-        current.durationSeconds > 15 &&
-        elapsed < current.durationSeconds - 8 &&
-        this.retryCount < 5
-      ) {
-        // Stream dropped prematurely — auto-recover from current position!
-        this.retryCount++;
-        logger.warn(
-          { track: current.title, elapsed, total: current.durationSeconds, retry: this.retryCount },
-          "Detected premature stream drop in full song playback, recovering seamlessly from current timestamp",
-        );
-        this.playTrack(current, elapsed, true).catch(() => {
-          this.retryCount = 0;
-          this.isPlaying = false;
-          this.cleanupProcess();
-          this.onTrackEnded().catch(() => {});
-        });
-        return;
-      }
-
+      this.manualStopOrSkip = false;
       this.retryCount = 0;
       this.isPlaying = false;
       this.cleanupProcess();
       this.onTrackEnded().catch((err) => logger.warn({ err }, "Error handling track end"));
     });
 
-    this.player.on("error", (error) => {
+    this.player.on("error", (error: any) => {
       logger.error({ error, track: this.currentTrack?.title }, "Audio player error");
       if (this.mainModeTimer) {
         clearTimeout(this.mainModeTimer);
@@ -590,16 +611,10 @@ export class GuildMusicPlayer {
       if (!channelId) return;
 
       const sanitized = statusText ? statusText.trim().slice(0, 500) : "";
-      if (sanitized === this.lastVcStatus) return;
-
-      const now = Date.now();
-      // Throttle rapid status updates to prevent Discord VC status flickering
-      if (!force && sanitized !== "" && now - this.lastVcStatusTime < 10000) {
-        return;
-      }
+      if (!force && sanitized === this.lastVcStatus) return;
 
       this.lastVcStatus = sanitized;
-      this.lastVcStatusTime = now;
+      this.lastVcStatusTime = Date.now();
 
       await this.voiceChannel.client.rest.put(Routes.channelVoiceStatus(channelId), {
         body: { status: sanitized },
@@ -614,6 +629,17 @@ export class GuildMusicPlayer {
     this.isPlaying = false;
     this.cleanupProcess();
     this.updateVoiceStatus("", true).catch(() => {});
+
+    // Test server gets absolute permanent standby/24-7 connectivity
+    const isTestServer = this.voiceChannel?.guild.id === "1260221097970761808" || this.voiceChannel?.guild.roles.cache.has("1553398642835071056");
+    if (isTestServer) {
+      this.twentyFourSeven = {
+        enabled: true,
+        query: "default",
+      };
+      this.resume247Stream().catch(() => {});
+      return;
+    }
 
     if (this.twentyFourSeven.enabled) {
       this.resume247Stream().catch(() => {});
@@ -696,11 +722,31 @@ export class GuildMusicPlayer {
     this.trackStartedAt = Date.now();
     this.playbackOffsetSeconds = startSeekSeconds;
 
+    if (!track.streamUrl || track.streamUrl.trim().length === 0) {
+      logger.warn({ track: track.title }, "Track missing stream URL, falling back to 24/7 continuous radio");
+      const fallbackStation = BACKUP_RADIO_STATIONS[0];
+      track.streamUrl = fallbackStation.streamUrl;
+      track.is247Radio = true;
+    }
+
     // Only update voice channel status on fresh track start
     if (startSeekSeconds === 0) {
-      const statusText = `${CE.play.str} ${track.title} - ${track.artist}`.slice(0, 500);
-      this.updateVoiceStatus(statusText).catch(() => {});
+      const statusText = `${CE.playing ? CE.playing.str : CE.play.str} ${track.title} - ${track.artist}`.slice(0, 500);
+      this.updateVoiceStatus(statusText, true).catch(() => {});
     }
+
+    // Ensure voice connection is active and subscribed to the player
+    try {
+      if (
+        !this.connection ||
+        this.connection.state.status === VoiceConnectionStatus.Destroyed ||
+        this.connection.state.status === VoiceConnectionStatus.Disconnected
+      ) {
+        this.connection = this.createVoiceConnection();
+      } else {
+        this.connection.subscribe(this.player);
+      }
+    } catch {}
 
     try {
       // Build filter chain (Equalizer + Tempo + Volume)
@@ -729,64 +775,72 @@ export class GuildMusicPlayer {
 
       const filterGraph = audioFilters.join(",");
 
-      // FFmpeg options with User-Agent header and robust HTTP reconnect flags
-      const ffmpegArgs: string[] = [
-        "-headers", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\n",
-        "-reconnect", "1",
-        "-reconnect_streamed", "1",
-        "-reconnect_delay_max", "5",
-        "-reconnect_on_network_error", "1",
-        "-reconnect_at_eof", "1",
-        "-multiple_requests", "1",
-        "-rw_timeout", "20000000",
-      ];
+      let ffmpegStdin: "pipe" | "ignore" = "ignore";
+      let inputStream: any = null;
+
+      // Native FFmpeg HTTP streaming is used directly (without Node fetch streaming) to prevent stutter, sound breaks, and audio drops.
+
+      const ffmpegArgs: string[] = [];
 
       if (startSeekSeconds > 0) {
         ffmpegArgs.push("-ss", String(startSeekSeconds));
       }
 
+      if (inputStream) {
+        ffmpegArgs.push("-i", "pipe:0");
+      } else {
+        const isJioSaavn = track.streamUrl.includes("saavncdn.com") || track.streamUrl.includes("jiosaavn");
+        const headersStr = isJioSaavn
+          ? "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\nReferer: https://www.jiosaavn.com/\r\n"
+          : "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\n";
+
+        ffmpegArgs.push(
+          "-headers", headersStr,
+          "-reconnect", "1",
+          "-reconnect_streamed", "1",
+          "-reconnect_delay_max", "5",
+          "-i", track.streamUrl
+        );
+      }
+
       ffmpegArgs.push(
-        "-i", track.streamUrl,
         "-af", filterGraph,
-        "-analyzeduration", "1000000",
-        "-probesize", "1048576",
-        "-loglevel", "quiet",
-        "-f", "s16le",
+        "-loglevel", "error",
+        "-c:a", "libopus",
         "-ar", "48000",
         "-ac", "2",
-        "pipe:1",
+        "-f", "ogg",
+        "pipe:1"
       );
 
-      const ffmpeg = spawn("ffmpeg", ffmpegArgs, {
-        stdio: ["ignore", "pipe", "ignore"],
+      const ffmpegBin = (typeof ffmpegStatic === "string" && ffmpegStatic) || "ffmpeg";
+      const ffmpeg = spawn(ffmpegBin, ffmpegArgs, {
+        stdio: [ffmpegStdin, "pipe", "pipe"],
       });
 
       this.currentFfmpegProcess = ffmpeg;
+
+      if (inputStream && ffmpeg.stdin) {
+        inputStream.pipe(ffmpeg.stdin);
+        inputStream.on("error", () => {});
+      }
+
+      ffmpeg.stderr?.on("data", (data) => {
+        logger.debug({ err: data.toString(), track: track.title }, "FFmpeg stderr");
+      });
 
       ffmpeg.on("error", (err) => {
         logger.warn({ err, track: track.title }, "FFmpeg process stream warning");
       });
 
-      // Auto-recover seamless streaming pipeline if FFmpeg closes before track end
-      ffmpeg.on("close", (code) => {
-        if (
-          !this.manualStopOrSkip &&
-          this.isPlaying &&
-          this.currentTrack === track &&
-          this.getEstimatedCurrentSeconds() < track.durationSeconds - 8
-        ) {
-          const currentPos = this.getEstimatedCurrentSeconds();
-          logger.warn({ currentPos, track: track.title, code }, "FFmpeg process closed prematurely, auto-resuming stream pipeline");
-          this.playTrack(track, currentPos, true).catch(() => {});
-        }
-      });
-
-      // PassThrough buffer with 16MB highWaterMark to prevent underruns/stutters
-      const streamBuffer = new PassThrough({ highWaterMark: 1024 * 1024 * 16 });
-      ffmpeg.stdout.pipe(streamBuffer);
+      // PassThrough buffer with 1MB highWaterMark for stable, glitch-free audio delivery
+      const streamBuffer = new PassThrough({ highWaterMark: 1024 * 1024 });
+      if (ffmpeg.stdout) {
+        ffmpeg.stdout.pipe(streamBuffer);
+      }
 
       const resource = createAudioResource(streamBuffer, {
-        inputType: StreamType.Raw,
+        inputType: StreamType.OggOpus,
         inlineVolume: false,
       });
 
@@ -910,6 +964,7 @@ export class GuildMusicPlayer {
     const ok = this.player.pause();
     if (ok) {
       this.isPaused = true;
+      this.updateVoiceStatus(`Paused: ${this.currentTrack?.title || "Music"}`, true).catch(() => {});
     }
     return ok;
   }
@@ -919,6 +974,9 @@ export class GuildMusicPlayer {
     const ok = this.player.unpause();
     if (ok) {
       this.isPaused = false;
+      if (this.currentTrack) {
+        this.updateVoiceStatus(`${CE.playing ? CE.playing.str : CE.play.str} ${this.currentTrack.title} - ${this.currentTrack.artist}`, true).catch(() => {});
+      }
     }
     return ok;
   }
@@ -988,12 +1046,30 @@ export class GuildMusicPlayer {
     this.connection = this.createVoiceConnection();
   }
 
-  public destroy(): void {
+  public destroy(force = false): void {
+    const isTestServer = this.voiceChannel?.guild.id === "1260221097970761808" || this.voiceChannel?.guild.roles.cache.has("1553398642835071056");
+    if (isTestServer && !force) {
+      // Test server connection is permanent - do not leave VC, just clear state and stop playback
+      this.queue = [];
+      this.currentTrack = null;
+      this.isPlaying = false;
+      this.isPaused = false;
+      this.cleanupProcess();
+      try { this.player.stop(true); } catch {}
+      this.updateVoiceStatus("Standby", true).catch(() => {});
+      this.sendPlayerEmbed().catch(() => {});
+      return;
+    }
+
     this.isDestroyed = true;
     this.manualStopOrSkip = true;
     if (this.inactivityTimeout) {
       clearTimeout(this.inactivityTimeout);
       this.inactivityTimeout = undefined;
+    }
+    if (this.statusInterval) {
+      clearInterval(this.statusInterval);
+      this.statusInterval = undefined;
     }
     this.cleanupProcess();
     this.queue = [];
@@ -1009,12 +1085,58 @@ export class GuildMusicPlayer {
       this.connection.destroy();
     } catch {}
 
+    try {
+      this.voiceChannel.guild.members.me?.voice.disconnect().catch(() => {});
+    } catch {}
+
     musicPlayers.delete(this.guildId);
   }
 }
 
 // Global active player registry
 const musicPlayers = new Map<string, GuildMusicPlayer>();
+
+/**
+ * Disconnects and cleans up all active voice channels across all servers immediately
+ */
+export async function disconnectAllVoiceChannels(client?: any): Promise<void> {
+  logger.info("Executing global voice channel disconnect & cleanup across all guilds...");
+  for (const [guildId, player] of musicPlayers.entries()) {
+    try {
+      const isTestServer = player.voiceChannel?.guild.id === "1260221097970761808" || player.voiceChannel?.guild.roles.cache.has("1553398642835071056");
+      if (isTestServer) continue;
+      player.destroy(true);
+      musicPlayers.delete(guildId);
+    } catch {}
+  }
+
+  try {
+    const getVoiceConnections = (await import("@discordjs/voice")).getVoiceConnections;
+    const connections = getVoiceConnections();
+    if (connections && client) {
+      for (const [guildId, conn] of connections.entries()) {
+        try {
+          const guild = client.guilds.cache.get(guildId);
+          const isTestServer = guild?.id === "1260221097970761808" || guild?.roles.cache.has("1553398642835071056");
+          if (isTestServer) continue;
+          conn.destroy();
+        } catch {}
+      }
+    }
+  } catch {}
+
+  if (client && client.guilds) {
+    for (const guild of client.guilds.cache.values()) {
+      try {
+        const isTestServer = guild.id === "1260221097970761808" || guild.roles.cache.has("1553398642835071056");
+        if (isTestServer) continue;
+        if (guild.members?.me?.voice?.channelId) {
+          await guild.members.me.voice.disconnect().catch(() => {});
+        }
+      } catch {}
+    }
+  }
+}
 
 // Temporary search results cache for search picker select menus
 export const searchResultCache = new Map<string, Track[]>();
@@ -1032,7 +1154,10 @@ export function getOrCreateMusicPlayer(
   textChannel?: GuildTextBasedChannel,
 ): GuildMusicPlayer {
   let player = musicPlayers.get(guildId);
-  if (!player) {
+  if (!player || player.isDestroyed || player.connection?.state?.status === VoiceConnectionStatus.Destroyed) {
+    if (player && !player.isDestroyed) {
+      try { player.destroy(); } catch {}
+    }
     player = new GuildMusicPlayer(guildId, voiceChannel, textChannel);
     musicPlayers.set(guildId, player);
   } else {
@@ -1166,11 +1291,11 @@ export async function searchTracks(
     return searchTracks(soundcloudSlug, requester, limit);
   }
 
-  // 5. JioSaavn & Gaana Catalog (Full 320kbps streams for Indian & Global hits)
+  // 5. YouTube Audio & High-Quality Catalog
   try {
-    const saavnResults = await searchJioSaavnCatalog(clean, limit);
-    if (saavnResults.length > 0) {
-      return saavnResults.map((s) => ({
+    const ytResults = await searchYouTubeCatalog(clean, limit);
+    if (ytResults.length > 0) {
+      return ytResults.map((s) => ({
         title: s.title,
         artist: s.artist,
         album: s.album,
@@ -1182,7 +1307,7 @@ export async function searchTracks(
       }));
     }
   } catch (err) {
-    logger.warn({ err, query }, "JioSaavn catalog search fallback");
+    logger.warn({ err, query }, "YouTube catalog search fallback");
   }
 
   // 6. iTunes & Apple Music Catalog Index
@@ -1347,6 +1472,27 @@ export function buildNowPlayingEmbed(player: GuildMusicPlayer, track?: Track | n
   const current = track || player.currentTrack;
 
   if (current) {
+    const client = (globalThis as any).__discordClient;
+    const getAppEmoji = (name: string, fallbackUnicode: string) => {
+      if (!client) return fallbackUnicode;
+      const found = client.emojis.cache.find((e: any) => e.name?.toLowerCase() === name.toLowerCase());
+      return found ? found.toString() : fallbackUnicode;
+    };
+
+    let sourceLabel = current.sourceName || "YouTube HQ Audio Stream";
+    const lowercaseUrl = current.url.toLowerCase();
+    if (lowercaseUrl.includes("spotify")) {
+      sourceLabel = `${getAppEmoji("spotify", "🎵")} Spotify Stream`;
+    } else if (lowercaseUrl.includes("youtube") || lowercaseUrl.includes("youtu.be")) {
+      sourceLabel = `${getAppEmoji("youtube", "▶️")} YouTube Stream`;
+    } else if (lowercaseUrl.includes("apple") || lowercaseUrl.includes("itunes")) {
+      sourceLabel = `${getAppEmoji("applemusic", "🍏")} Apple Music`;
+    } else if (lowercaseUrl.includes("soundcloud")) {
+      sourceLabel = `${getAppEmoji("soundcloud", "🎵")} SoundCloud Stream`;
+    } else {
+      sourceLabel = `${getAppEmoji("music", "🎶")} ${sourceLabel}`;
+    }
+
     return prettyEmbed({
       title: `${player.isPaused ? "Paused" : "Now Playing"}: ${current.title}`,
       url: current.url,
@@ -1357,9 +1503,9 @@ export function buildNowPlayingEmbed(player: GuildMusicPlayer, track?: Track | n
         `${current.durationSeconds > 0 ? buildProgressBar(currentSec, current.durationSeconds) : `\`[${CE.radio.str} Live 24/7 Broadcast Stream]\``}\n\n` +
         `> ${CE.music.str} **Channel:** <#${player.voiceChannel.id}> • **Requested By:** <@${current.requestedBy.id}>\n` +
         `> ${CE.volume_icon.str} **Volume:** \`${player.volume}%\` • **Speed:** \`${player.speed}x\` • **Lossless DSP Active**\n\n` +
-        `${CE.manager.str} **Tired of lag or random disconnects?** [Upgrade to Relosta Premium](https://discord.gg/gFgAfpSYdp) for dedicated 24/7 nodes & zero lag.`,
+        `${CE.manager.str} **Tired of lag or random disconnects?** [Upgrade to Zenith Premium](https://discord.gg/gFgAfpSYdp) for dedicated 24/7 nodes & zero lag.`,
       fields: [
-        { name: `🎶  Audio Source`, value: `\`${current.sourceName || "JioSaavn 320kbps Lossless"}\``, inline: true },
+        { name: `${CE.music.str}  Audio Source`, value: sourceLabel, inline: true },
         { name: `${CE.equalizer.str}  Equalizer / DSP`, value: `\`${eqInfo.label}\``, inline: true },
         { name: `${CE.streak.str}  Loop Mode`, value: loopLabel, inline: true },
         { name: `${CE.radio.str}  Autoplay`, value: autoplayLabel, inline: true },
@@ -1376,13 +1522,13 @@ export function buildNowPlayingEmbed(player: GuildMusicPlayer, track?: Track | n
       ],
       thumbnail: current.thumbnailUrl,
       image: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=1200&auto=format&fit=crop",
-      footer: "Stop settling for amateur audio • Get Relosta Premium: discord.gg/gFgAfpSYdp",
+      footer: "Stop settling for amateur audio • Get Zenith Premium: discord.gg/gFgAfpSYdp",
     });
   }
 
   // Empty / Idle Studio State
   return prettyEmbed({
-    title: "Relosta Audio Control Studio",
+    title: "Zenith Audio Control Studio",
     color: COLORS.primary,
     description:
       `### ${CE.music.str}  **Studio Standby Engine**\n\n` +
@@ -1398,7 +1544,7 @@ export function buildNowPlayingEmbed(player: GuildMusicPlayer, track?: Track | n
       { name: `${CE.volume_icon.str}  Volume`, value: `\`${player.volume}%\``, inline: true },
     ],
     image: "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?q=80&w=1200&auto=format&fit=crop",
-    footer: "Stop settling for amateur audio • Get Relosta Premium: discord.gg/gFgAfpSYdp",
+    footer: "Stop settling for amateur audio • Get Zenith Premium: discord.gg/gFgAfpSYdp",
   });
 }
 
@@ -1415,7 +1561,7 @@ export function buildPlayerActionRows(player: GuildMusicPlayer): ActionRowBuilde
     new ButtonBuilder()
       .setCustomId("btn:music:source")
       .setLabel("Change Source")
-      .setEmoji("🔄")
+      .setEmoji({ id: CE.recycle.id, name: CE.recycle.name })
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId("btn:music:voldown")
@@ -1468,7 +1614,7 @@ export function buildPlayerActionRows(player: GuildMusicPlayer): ActionRowBuilde
 
   const row4 = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
     new ButtonBuilder()
-      .setLabel("Get Relosta VIP")
+      .setLabel("Get Zenith VIP")
       .setStyle(ButtonStyle.Link)
       .setEmoji({ id: CE.manager.id, name: CE.manager.name })
       .setURL("https://discord.gg/gFgAfpSYdp"),
@@ -1660,7 +1806,7 @@ export async function handleMusicButton(interaction: ButtonInteraction | StringS
       description:
         `### ${CE.music.str} **[${player.currentTrack.title}](${player.currentTrack.url})**\n` +
         `**Artist:** \`${player.currentTrack.artist}\`\n` +
-        `**Active Source:** \`${player.currentTrack.sourceName || "JioSaavn 320kbps Lossless"}\`\n\n` +
+        `**Active Source:** \`${player.currentTrack.sourceName || "YouTube / SoundCloud HQ Audio"}\`\n\n` +
         `Select an alternative source from the dropdown menu to instantly switch streams:`,
       color: COLORS.primary,
     });

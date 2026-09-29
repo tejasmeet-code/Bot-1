@@ -17,6 +17,12 @@ export const COMMAND_ALIASES: Record<string, string> = {
   // ── Moderation ─────────────────────────────────────────────────────────────
   "b": "ban",
   "ban": "ban",
+  "shooter": "ban",
+  "shooters": "ban",
+  "shoot": "ban",
+  "shot": "ban",
+  "massban": "ban",
+  "mb": "ban",
   "ub": "unban",
   "unban": "unban",
   "unbanall": "unban-all",
@@ -74,6 +80,10 @@ export const COMMAND_ALIASES: Record<string, string> = {
   "settings": "config",
   "pref": "config",
   "preferences": "config",
+  "botmaintenance": "botmaintenance",
+  "botmaintainence": "botmaintenance",
+  "botdown": "botdown",
+  "botnormal": "botnormal",
 
   // ── Info & Utility ────────────────────────────────────────────────────────
   "h": "help",
@@ -82,6 +92,8 @@ export const COMMAND_ALIASES: Record<string, string> = {
   "commands": "help",
   "ping": "ping",
   "latency": "ping",
+  "oping": "oping",
+  "ownerping": "oping",
   "checkstaff": "checkstaff",
   "cstaff": "checkstaff",
   "isstaff": "checkstaff",
@@ -220,6 +232,13 @@ export const COMMAND_ALIASES: Record<string, string> = {
   "bio": "setbio",
   "noprefix": "noprefix",
   "npf": "noprefix",
+  "botavatar": "botavatar",
+  "bot-avatar": "botavatar",
+  "botname": "botavatar",
+  "bot-name": "botavatar",
+  "serverbotavatar": "botavatar",
+  "serverbotname": "botavatar",
+  "botprofile": "botavatar",
 
   // ── Premium ───────────────────────────────────────────────────────────────
   "prem": "premium",
@@ -554,11 +573,35 @@ export function resolveCommandAndArgs(
     rawArgs = rawArgs.filter((a) => !isInfoFlag(a));
   }
 
-  const canonicalName = COMMAND_ALIASES[cleanCmd] || cleanCmd;
+  let canonicalName = COMMAND_ALIASES[cleanCmd] || cleanCmd;
+  let resolvedArgs = [...rawArgs];
+
+  // Specific routing for composite commands like .premium panel / .prem panel
+  if (canonicalName === "premium" && resolvedArgs.length > 0) {
+    const sub = resolvedArgs[0].toLowerCase();
+    if (sub === "panel" || sub === "p") {
+      canonicalName = "premium-panel";
+      resolvedArgs = resolvedArgs.slice(1);
+    } else if (sub === "give" || sub === "g") {
+      canonicalName = "premium-give";
+      resolvedArgs = resolvedArgs.slice(1);
+    } else if (sub === "user" || sub === "u") {
+      canonicalName = "premium-user";
+      resolvedArgs = resolvedArgs.slice(1);
+    } else if (sub === "server" || sub === "guild" || sub === "s") {
+      canonicalName = "premium-server";
+      resolvedArgs = resolvedArgs.slice(1);
+    } else if (sub === "generate" || sub === "gen") {
+      canonicalName = "premium-generate";
+      resolvedArgs = resolvedArgs.slice(1);
+    } else if (sub === "check" || sub === "status" || sub === "c") {
+      canonicalName = "premiumcheck";
+      resolvedArgs = resolvedArgs.slice(1);
+    }
+  }
 
   // Check subcommand alias mapping for this canonical command
   const subAliases = SUBCOMMAND_ALIASES[canonicalName];
-  const resolvedArgs = [...rawArgs];
   if (subAliases && resolvedArgs.length > 0) {
     const firstArg = resolvedArgs[0].toLowerCase();
     if (subAliases[firstArg]) {
@@ -646,6 +689,6 @@ export function buildCommandInfoEmbed(command: SlashCommand, requestedName: stri
       },
     )
     .setThumbnail("https://cdn-icons-png.flaticon.com/512/4712/4712035.png")
-    .setFooter({ text: "Relosta Command Engine • Use .help for full command catalog" })
+    .setFooter({ text: "Zenith Command Engine • Use .help for full command catalog" })
     .setTimestamp();
 }

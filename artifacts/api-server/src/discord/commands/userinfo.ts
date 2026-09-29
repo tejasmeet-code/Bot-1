@@ -40,7 +40,7 @@ const command: SlashCommand = {
         `> **Mention:** <@${target.id}>\n` +
         `> **Bot Account:** \`${target.bot ? "Yes" : "No"}\`\n\n` +
         `${CE.manager.str} **Want automated role assignments and custom auto-reactions?**\n` +
-        `Unlock full community automation with **Relosta Premium**.`,
+        `Unlock full community automation with **Zenith Premium**.`,
       color: COLORS.primary,
       thumbnail: target.displayAvatarURL({ size: 256 }),
       fields: [

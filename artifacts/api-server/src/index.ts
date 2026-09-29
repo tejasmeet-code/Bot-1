@@ -63,12 +63,29 @@ server.on("error", (err) => {
   logger.error({ err }, "Express server error");
 });
 
-// Discord bot client is disabled on this instance because it is hosted elsewhere.
-// Set START_DISCORD_BOT="true" in the environment if you ever need to run the bot instance here.
-if (process.env.START_DISCORD_BOT === "true") {
+// Discord bot client starts by default if DISCORD_BOT_TOKEN is present, or if START_DISCORD_BOT="true"
+const shouldStartBot = process.env.START_DISCORD_BOT === "true" || (process.env.START_DISCORD_BOT !== "false" && !!process.env.DISCORD_BOT_TOKEN);
+if (shouldStartBot) {
   startDiscordBot().catch((err) => {
     logger.error({ err }, "Discord bot failed to start — check DISCORD_BOT_TOKEN and DISCORD_CLIENT_ID");
   });
 } else {
-  logger.info("Main Discord bot hosting is disabled on this instance (hosted elsewhere).");
+  logger.info("Main Discord bot hosting is disabled on this instance.");
 }
+
+// 24/7 Keep-Alive self-ping loop (Pings local server and external URL every 5 minutes)
+const KEEP_ALIVE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+setInterval(() => {
+  const localHealthUrl = `http://127.0.0.1:${port}/health`;
+  const renderUrl = process.env.RENDER_EXTERNAL_URL;
+  const targetUrls = [localHealthUrl];
+  if (renderUrl) {
+    targetUrls.push(`${renderUrl}/health`);
+  }
+
+  targetUrls.forEach((url) => {
+    fetch(url)
+      .then((res) => logger.info({ url, status: res.status }, "24/7 Keep-Alive self-ping successful"))
+      .catch((err) => logger.warn({ url, err: err.message }, "24/7 Keep-Alive self-ping error"));
+  });
+}, KEEP_ALIVE_INTERVAL_MS);

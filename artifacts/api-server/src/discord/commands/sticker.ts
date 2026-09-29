@@ -135,13 +135,13 @@ export const stickerCommand: SlashCommand = {
                 `> **Tags:** \`${created.tags}\`\n` +
                 `> **Description:** ${created.description ? `\`${created.description}\`` : "*None*"}\n` +
                 `> **Added By:** <@${interaction.user.id}>\n\n` +
-                `${CE.manager.str} **Upgrade to Relosta Premium** for unlimited sticker backups & expressions sync!`,
+                `${CE.manager.str} **Upgrade to Zenith Premium** for unlimited sticker backups & expressions sync!`,
               thumbnail: created.url,
               color: COLORS.success,
-              footer: "Relosta Sticker Manager • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Sticker Manager • discord.gg/gFgAfpSYdp",
             }),
           ],
-          components: [buildSupportRow("Relosta VIP Hub")],
+          components: [buildSupportRow("Zenith VIP Hub")],
         });
       } catch (err: any) {
         if (interaction.deferred || interaction.replied) {
@@ -208,7 +208,7 @@ export const stickerCommand: SlashCommand = {
                 `> **Description:** ${updated.description ? `\`${updated.description}\`` : "*None*"}`,
               thumbnail: updated.url,
               color: COLORS.success,
-              footer: "Relosta Sticker Manager • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Sticker Manager • discord.gg/gFgAfpSYdp",
             }),
           ],
         });
@@ -256,7 +256,7 @@ export const stickerCommand: SlashCommand = {
                 `> **Reason:** ${reason}`,
               thumbnail: url,
               color: COLORS.danger,
-              footer: "Relosta Sticker Manager • discord.gg/gFgAfpSYdp",
+              footer: "Zenith Sticker Manager • discord.gg/gFgAfpSYdp",
             }),
           ],
         });
@@ -281,13 +281,13 @@ export const stickerCommand: SlashCommand = {
           description:
             `### ${CE.star.str}  **Custom Stickers**\n\n` +
             (stickerLines.length > 0 ? stickerLines.join("\n") : "*No stickers found in this server*") +
-            `\n\n> ${CE.manager.str} **Backup Guarantee:** Keep server stickers safe from accidental deletes with Relosta VIP Cloud backups.`,
+            `\n\n> ${CE.manager.str} **Backup Guarantee:** Keep server stickers safe from accidental deletes with Zenith VIP Cloud backups.`,
           fields: [{ name: "Total Stickers", value: `\`${stickers.length}\``, inline: true }],
           color: COLORS.primary,
-          footer: "Relosta Sticker Manager • discord.gg/gFgAfpSYdp",
+          footer: "Zenith Sticker Manager • discord.gg/gFgAfpSYdp",
         }),
       ],
-      components: [buildSupportRow("Relosta VIP Hub")],
+      components: [buildSupportRow("Zenith VIP Hub")],
     });
   },
 };

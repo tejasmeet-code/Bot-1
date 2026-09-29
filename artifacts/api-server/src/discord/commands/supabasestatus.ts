@@ -45,7 +45,7 @@ const command: SlashCommand = {
               title: `${CE.error.str} Supabase Sync Error`,
               description: `Could not sync stores to Supabase: \`${syncResult.error}\``,
               color: COLORS.danger,
-              footer: "Relosta Bot Persistence Manager",
+              footer: "Zenith Bot Persistence Manager",
             }),
           ],
         });
@@ -67,7 +67,7 @@ const command: SlashCommand = {
                 },
               ]),
             color: COLORS.success,
-            footer: "Relosta Bot Persistence Manager",
+            footer: "Zenith Bot Persistence Manager",
           }),
         ],
       });
@@ -100,7 +100,7 @@ const command: SlashCommand = {
               `   );\n` +
               `   \`\`\``,
             color: COLORS.warning,
-            footer: "Relosta Bot Persistence Manager",
+            footer: "Zenith Bot Persistence Manager",
           }),
         ],
       });
@@ -137,7 +137,7 @@ const command: SlashCommand = {
                 `);\n` +
                 `\`\`\``,
             color: isPaused ? COLORS.warning : COLORS.danger,
-            footer: "Relosta Bot Persistence Manager",
+            footer: "Zenith Bot Persistence Manager",
           }),
         ],
       });
@@ -158,7 +158,7 @@ const command: SlashCommand = {
             ]) +
             `\n\n*Tip: Run \`.db sync\` at any time to force-sync all local files to the cloud.*`,
           color: COLORS.success,
-          footer: "Relosta Bot Persistence Manager",
+          footer: "Zenith Bot Persistence Manager",
         }),
       ],
     });

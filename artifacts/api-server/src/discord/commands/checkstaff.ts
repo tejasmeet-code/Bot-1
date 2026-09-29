@@ -14,7 +14,7 @@ import { CE, COLORS, prettyEmbed } from "../utils/embedStyle";
 export const checkstaffCommand: SlashCommand = {
   data: new SlashCommandBuilder()
     .setName("checkstaff")
-    .setDescription("Check and verify if a user is an official Relosta Bot Staff member")
+    .setDescription("Check and verify if a user is an official Zenith Bot Staff member")
     .addUserOption((o) =>
       o.setName("target").setDescription("User to check staff verification status").setRequired(false)
     ),
@@ -33,9 +33,9 @@ export const checkstaffCommand: SlashCommand = {
           `**User:** <@${targetUser.id}> (\`${targetUser.tag}\`)\n` +
           `**User ID:** \`${targetUser.id}\`\n` +
           `**Staff Rank:** \`[HARDCODED PERMANENT OWNER]\` ${CE.owner.str}\n\n` +
-          `> ${CE.trophy.str} **Verification Status:** This user is the **Permanent Creator & Hardcoded Owner** of Relosta Bot.`,
+          `> ${CE.trophy.str} **Verification Status:** This user is the **Permanent Creator & Hardcoded Owner** of Zenith Bot.`,
         thumbnail: targetUser.displayAvatarURL({ extension: "png", size: 512 }),
-        footer: "Relosta Official Security Verification Engine",
+        footer: "Zenith Official Security Verification Engine",
       });
       await interaction.reply({ embeds: [embed] });
       return;
@@ -57,7 +57,7 @@ export const checkstaffCommand: SlashCommand = {
           `**Staff Privileges:**\n` +
           (roleMeta?.benefits?.map((b) => `• ${b}`).join("\n") || "• Official support & community management clearance"),
         thumbnail: targetUser.displayAvatarURL({ extension: "png", size: 512 }),
-        footer: "Relosta Official Security Verification Engine",
+        footer: "Zenith Official Security Verification Engine",
       });
       await interaction.reply({ embeds: [embed] });
       return;
@@ -72,9 +72,9 @@ export const checkstaffCommand: SlashCommand = {
         `**User:** <@${targetUser.id}> (\`${targetUser.tag}\`)\n` +
         `**User ID:** \`${targetUser.id}\`\n` +
         `**Verification Status:** ${CE.error.str} **NOT A BOT STAFF MEMBER**\n\n` +
-        `> ${CE.warning.str} **Security Warning:** This user is **NOT** an official Relosta Bot Staff member. Never trust fake staff claims asking for passwords, tokens, or administrator permissions!`,
+        `> ${CE.warning.str} **Security Warning:** This user is **NOT** an official Zenith Bot Staff member. Never trust fake staff claims asking for passwords, tokens, or administrator permissions!`,
       thumbnail: targetUser.displayAvatarURL({ extension: "png", size: 512 }),
-      footer: "Relosta Official Security Verification Engine",
+      footer: "Zenith Official Security Verification Engine",
     });
     await interaction.reply({ embeds: [embed] });
   },

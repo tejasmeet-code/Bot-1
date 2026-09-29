@@ -4,7 +4,7 @@ export function getDashboardHtml(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Relosta Bot • Operations & Admin Control Center</title>
+  <title>Zenith Bot • Operations & Admin Control Center</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -622,7 +622,7 @@ export function getDashboardHtml(): string {
         </div>
         <div>
           <div class="brand-title">
-            <span id="header-bot-name">Relosta Bot</span>
+            <span id="header-bot-name">Zenith Bot</span>
             <span class="status-badge-healthy" id="header-healthy-badge">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
               Bot is online and healthy!
@@ -1221,7 +1221,7 @@ export function getDashboardHtml(): string {
           <div class="form-row">
             <div class="form-group" style="flex: 2;">
               <label for="setting-prefix-input">Command Prefix Symbol</label>
-              <input type="text" id="setting-prefix-input" placeholder="e.g. . or ! or ? or bp? or relosta." value="." required maxlength="10">
+              <input type="text" id="setting-prefix-input" placeholder="e.g. . or ! or ? or bp? or zenith." value="." required maxlength="10">
             </div>
             <div class="form-group" style="flex: 2;">
               <label for="setting-target-select">Scope Target</label>
@@ -1275,7 +1275,7 @@ export function getDashboardHtml(): string {
   <!-- Footer -->
   <footer>
     <div class="footer-inner">
-      <div>Relosta Bot Central Operations Dashboard • Live WebSocket Gateway Connected</div>
+      <div>Zenith Bot Central Operations Dashboard • Live WebSocket Gateway Connected</div>
       <div id="footer-build-info">Deployment Region: Cloud Run • Port 3000 Active</div>
     </div>
   </footer>

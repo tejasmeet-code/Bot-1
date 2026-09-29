@@ -561,7 +561,8 @@ function closeRow(): Row {
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId("cfg:autowizard")
-      .setLabel(`${CE.boost.str} 1-Click Auto Setup`)
+      .setLabel("1-Click Auto Setup")
+      .setEmoji(CE.boost.id ? { id: CE.boost.id, name: CE.boost.name } : CE.boost.str)
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId("cfg:close")
@@ -574,7 +575,7 @@ function backRow(): Row {
   return new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId("cfg:back")
-      .setLabel("← Back")
+      .setLabel("Back")
       .setStyle(ButtonStyle.Secondary),
   );
 }
@@ -584,45 +585,60 @@ function backRow(): Row {
 function buildOverviewEmbed(cfg: GuildConfig): EmbedBuilder {
   const prefix = cfg.guildPrefix ?? ".";
   
-  let desc = `${CE.settings.str} **Prefix:** \`${prefix}\` (DM: \`${prefix}n\`)\n\n` +
-    `${CE.settings.str} **Setup Wizard & Auto Configuration**\n` +
-    `Click **Setup Wizard** or **${CE.boost.str} 1-Click Auto Setup** below to automatically detect standard server roles (e.g. \`Staff Team\`, \`Moderator\`, \`Member\`) and logging channels, map role hierarchies, and **unlock all bot commands** instantly!\n\n` +
-    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-    `Select a category from the dropdown below to configure specific modules.\n\n`;
+  const desc = `**Prefix:** \`${prefix}\` • **DM Prefix:** \`${prefix}n\`\n\n` +
+    `> **Server Setup & Auto Configuration**\n` +
+    `> Use **Setup Wizard** or **1-Click Auto Setup** below to auto-detect roles, setup logging channels, and unlock commands.\n\n` +
+    `Select a category from the dropdown menu below:`;
+
+  const embed = new EmbedBuilder()
+    .setTitle("Zenith Configuration & Setup Center")
+    .setColor(0x2b2d31)
+    .setDescription(desc)
+    .setFooter({ text: "Zenith Intelligence • Administrators always have access" });
 
   for (const cat of CONFIG_CATEGORIES) {
-    desc += `### ${cat.emoji} ${cat.label}\n${cat.desc}\n\n`;
+    embed.addFields({
+      name: `${cat.emoji} ${cat.label}`,
+      value: cat.desc,
+      inline: true,
+    });
   }
 
-  return new EmbedBuilder()
-    .setTitle("Relosta Configuration & Setup Center")
-    .setColor(0x2b2d31)
-    .setDescription(desc.trim())
-    .setImage("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1200&auto=format&fit=crop")
-    .setFooter({ text: "Administrators always have access • .an st for Anti-Nuke Setup" });
+  return embed;
 }
 
 function buildCategoryEmbed(catId: string, cfg: GuildConfig): EmbedBuilder {
   const cat = CONFIG_CATEGORIES.find(c => c.id === catId);
   if (!cat) return new EmbedBuilder();
 
-  let desc = `${cat.desc}\nSelect a module to configure using the dropdown below.\n\n`;
+  const embed = new EmbedBuilder()
+    .setTitle(`${cat.label} Configuration`)
+    .setColor(0x2b2d31)
+    .setDescription(cat.desc)
+    .setFooter({ text: "Select a module from the dropdown below" });
+
   for (const itemId of cat.items) {
     if (STANDALONE_OPTS[itemId]) {
-      desc += `${CE.information.str} **${STANDALONE_OPTS[itemId].label}**\n`;
+      const opt = STANDALONE_OPTS[itemId];
+      embed.addFields({
+        name: `${opt.emoji.str} ${opt.label}`,
+        value: opt.desc,
+        inline: true,
+      });
     } else {
       const m = MODULE_DEFS.find((x) => x.id === itemId);
       if (m) {
         const on = cfg.modules[m.moduleKey as keyof typeof cfg.modules] ?? false;
-        desc += `${on ? CE.success.str : CE.error.str} **${m.label}**\n`;
+        embed.addFields({
+          name: `${on ? CE.success.str : CE.error.str} ${m.label}`,
+          value: m.description,
+          inline: true,
+        });
       }
     }
   }
 
-  return new EmbedBuilder()
-    .setTitle(`${cat.emoji} ${cat.label} Configuration`)
-    .setColor(0x2b2d31)
-    .setDescription(desc.trim());
+  return embed;
 }
 
 // ── Settings summary (one-liner shown in the module embed) ───────────────────
@@ -1837,7 +1853,7 @@ function botProfileModal(currentNick: string | null): ModalBuilder {
           .setRequired(false)
           .setMaxLength(32)
           .setValue(currentNick ?? "")
-          .setPlaceholder("Relosta Bot"),
+          .setPlaceholder("Zenith Bot"),
       ),
     );
 }

@@ -40,7 +40,7 @@ const command: SlashCommand = {
         description: `${buildBullets([{ label: "Summary", value: summary }])}\n\n${lines.join("\n")}`,
         thumbnail: target.displayAvatarURL({ size: 256 }),
         color: COLORS.staff,
-        footer: `${modCases.length} total • showing ${Math.min(modCases.length, 20)} • Relosta Bot`,
+        footer: `${modCases.length} total • showing ${Math.min(modCases.length, 20)} • Zenith Bot`,
       })],
     });
   },

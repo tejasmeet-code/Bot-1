@@ -84,7 +84,7 @@ export const premiumCheckCommand: SlashCommand = {
     const embed = new EmbedBuilder()
       .setTitle(`${CE.star.str} Premium Status Verification`)
       .setTimestamp()
-      .setFooter({ text: `Relosta Executive Registry • Checked by ${interaction.user.tag}` });
+      .setFooter({ text: `Zenith Executive Registry • Checked by ${interaction.user.tag}` });
 
     if (info.isActive) {
       embed.setColor(0xF1C40F);

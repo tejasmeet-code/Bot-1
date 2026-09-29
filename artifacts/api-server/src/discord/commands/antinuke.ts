@@ -199,6 +199,9 @@ const command: SlashCommand = {
 
     if (sub === "setup") {
       const punishmentChoice = (interaction.options.getString("punishment") as any) || "ban";
+      const { detectSmartRoles } = await import("../utils/roleDetector");
+      const detection = await detectSmartRoles(interaction.guild);
+
       await updateGuildConfig(interaction.guildId, (cfg) => {
         const an = getAntiNukeConfig(cfg);
         an.enabled = true;
@@ -210,30 +213,44 @@ const command: SlashCommand = {
         if (!an.globalWhitelistUserIds.includes(interaction.user.id)) {
           an.globalWhitelistUserIds.push(interaction.user.id);
         }
+        if (detection.ownerRole && !an.globalWhitelistRoleIds.includes(detection.ownerRole.id)) {
+          an.globalWhitelistRoleIds.push(detection.ownerRole.id);
+        }
+        if (detection.adminRole && !an.globalWhitelistRoleIds.includes(detection.adminRole.id)) {
+          an.globalWhitelistRoleIds.push(detection.adminRole.id);
+        }
         cfg.antiNukeConfig = an;
         return cfg;
       });
 
       const embed = new EmbedBuilder()
-        .setTitle(`${CE.nuke.str} Anti-Nuke Auto Setup Complete!`)
+        .setTitle(`${CE.nuke.str} Anti-Nuke: 3 Security Walls Armed!`)
         .setColor(0x57f287)
         .setDescription(
-          `**Anti-Nuke Protection System is now 100% ARMED and ACTIVE!**\n\n` +
+          `**All 3 Anti-Nuke Security Walls are now 100% ARMED and ACTIVE!**\n\n` +
           `• **Status:** \`ACTIVE & MONITORING\`\n` +
-          `• **Enforcement Punishment:** \`${punishmentChoice.toUpperCase()}\`\n` +
+          `• **Enforcement Action:** \`${punishmentChoice.toUpperCase()}\`\n` +
           `• **Server Owner Whitelisted:** <@${interaction.guild.ownerId}>\n` +
           `• **Setup Admin Whitelisted:** <@${interaction.user.id}>\n\n` +
-          `Any unauthorized mass kicks, bans, channel deletions, role deletions, bot additions, or rogue webhooks will be immediately countered.`,
-        )
-        .addFields(
-          { name: `${CE.locked.str} Channel Protection`, value: "Max 2 deletions / 10s", inline: true },
-          { name: `${CE.locked.str} Role Protection`, value: "Max 2 deletions / 10s", inline: true },
-          { name: `${CE.ban.str} Mass Ban / Kick`, value: "Max 3 punishments / 10s", inline: true },
-          { name: `${CE.nuke.str} Webhook & Bot Adds`, value: "Instant block & quarantine", inline: true },
+          `### 🧱 **Active 3 Security Walls:**\n` +
+          `• **Wall 1: Staff & Entry Shield** *(Staff Level)*\n` +
+          `  Halts unauthorized kicks, member pruning, and anti-spam bypass.\n` +
+          `• **Wall 2: Structure & Admin Shield** *(Admin Level)*\n` +
+          `  Blocks channel deletions, role modifications, bot additions, and rogue webhooks.\n` +
+          `• **Wall 3: Apex God-Mode Shield** *(Owner Level)*\n` +
+          `  Quarantines mass-bans, vanity/guild tampering, and nuke attacks instantly.`,
         )
         .setImage("https://images.unsplash.com/photo-1563986768609-322da13575f3?q=80&w=1200&auto=format&fit=crop")
-        .setFooter({ text: "Relosta Sentinel Engine • Use .an wl to add additional trusted admins" })
+        .setFooter({ text: "Zenith Sentinel Engine • Use .an wl to manage whitelists" })
         .setTimestamp();
+
+      if (!detection.isBotRoleHighEnough && detection.botRoleWarning) {
+        embed.addFields({
+          name: `⚠️ High Role Position Required`,
+          value: detection.botRoleWarning,
+          inline: false,
+        });
+      }
 
       await interaction.reply({ embeds: [embed] });
       return;
