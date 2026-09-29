@@ -35,6 +35,7 @@ export function getDiscordClient(): Client {
 let isBotStartingOrStarted = false;
 
 export async function startDiscordBot(): Promise<void> {
+  console.log("[boot] startDiscordBot called");
   if (isBotStartingOrStarted && (globalThis as any).__discordClient?.isReady()) {
     logger.warn("startDiscordBot called but Discord bot is already started and ready. Skipping duplicate start.");
     return;
@@ -51,9 +52,12 @@ export async function startDiscordBot(): Promise<void> {
   isBotStartingOrStarted = true;
 
   try {
+    console.log("[boot] importing and loading devServerEmojiSync");
     const { loadSavedCustomEmojis } = await import("./utils/devServerEmojiSync");
     loadSavedCustomEmojis();
+    console.log("[boot] calling initPermWhitelist");
     await initPermWhitelist();
+    console.log("[boot] completed initPermWhitelist");
 
     const token = process.env.DISCORD_BOT_TOKEN;
     const clientId = process.env.DISCORD_CLIENT_ID;
@@ -64,6 +68,7 @@ export async function startDiscordBot(): Promise<void> {
       throw new Error("DISCORD_CLIENT_ID environment variable is not set");
     }
 
+    console.log("[boot] creating Discord.js Client");
     const client = new Client({
       intents: [
         IntentsBitField.Flags.Guilds,
@@ -79,13 +84,18 @@ export async function startDiscordBot(): Promise<void> {
 
     (globalThis as any).__discordClient = client;
 
+  console.log("[boot] setting up REST");
   const rest = new REST({ version: "10" }).setToken(token);
   // Only register commands within Discord's 100-command limit.
   // Fun/game commands are excluded via getGuildCommands() in registry.ts.
+  console.log("[boot] fetching registrableCommands");
   const registrableCommands = getGuildCommands();
+  console.log("[boot] map commands to JSON");
   const commandPayload = registrableCommands.map((c) => c.data.toJSON());
 
+  console.log("[boot] startAutoBackupScheduler");
   startAutoBackupScheduler();
+  console.log("[boot] getCommandMap");
   const commandMap = getCommandMap();
 
   // ────────────────────────────────────────────────────────────────────
