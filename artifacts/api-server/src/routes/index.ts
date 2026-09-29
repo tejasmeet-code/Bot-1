@@ -28,10 +28,12 @@ router.get("/download-patch", (_req, res) => {
   
   exec(`tar -czf "${tarPath}" ${filesToPack}`, (err) => {
     if (err) {
-      return res.status(500).send({ error: "Failed to create archive", details: err.message });
+      res.status(500).send({ error: "Failed to create archive", details: err.message });
+      return;
     }
     res.download(tarPath, "modified_files.tar.gz");
   });
+  return;
 });
 
 export default router;

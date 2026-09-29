@@ -40,7 +40,7 @@ export async function getAudioStreamFromYtdl(youtubeUrl: string): Promise<string
     });
     const audioFormats = ytdl.filterFormats(info.formats, "audioonly");
     if (audioFormats && audioFormats.length > 0) {
-      const best = audioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+      const best = audioFormats.sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0))[0];
       if (best?.url) {
         return best.url;
       }

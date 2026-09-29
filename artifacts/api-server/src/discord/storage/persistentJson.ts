@@ -164,16 +164,16 @@ async function writeSupabaseJson<T>(storeName: string, data: T): Promise<void> {
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+function withTimeout<T>(promise: PromiseLike<T> | any, timeoutMs: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error(`Timeout of ${timeoutMs}ms exceeded for ${label}`));
     }, timeoutMs);
 
-    promise
+    Promise.resolve(promise)
       .then((res) => {
         clearTimeout(timer);
-        resolve(res);
+        resolve(res as T);
       })
       .catch((err) => {
         clearTimeout(timer);
@@ -203,7 +203,7 @@ export async function loadPersistentJson<T>(
       .maybeSingle();
 
     console.log(`[persistentJson] awaiting Supabase withTimeout for ${storeName}`);
-    const { data, error } = await withTimeout(supabasePromise, 3000, `load:${storeName}`);
+    const { data, error } = (await withTimeout(supabasePromise, 3000, `load:${storeName}`)) as any;
     console.log(`[persistentJson] completed Supabase query for ${storeName}`);
 
     if (error) throw error;
