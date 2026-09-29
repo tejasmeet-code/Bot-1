@@ -36,30 +36,45 @@ const baseLogger = pino({
   ],
 });
 
-export const logger = Object.assign(Object.create(Object.getPrototypeOf(baseLogger)), baseLogger, {
-  info: (arg1: any, arg2?: string) => {
-    baseLogger.info(arg1, arg2);
-    const msg = typeof arg1 === "string" ? arg1 : (arg2 || JSON.stringify(arg1));
-    const meta = typeof arg1 === "object" ? arg1 : undefined;
-    addLogEntry("info", msg, meta);
-  },
-  warn: (arg1: any, arg2?: string) => {
-    baseLogger.warn(arg1, arg2);
-    const msg = typeof arg1 === "string" ? arg1 : (arg2 || JSON.stringify(arg1));
-    const meta = typeof arg1 === "object" ? arg1 : undefined;
-    addLogEntry("warn", msg, meta);
-  },
-  error: (arg1: any, arg2?: string) => {
-    baseLogger.error(arg1, arg2);
-    const msg = typeof arg1 === "string" ? arg1 : (arg2 || (arg1?.err?.message ?? JSON.stringify(arg1)));
-    const meta = typeof arg1 === "object" ? arg1 : undefined;
-    addLogEntry("error", msg, meta);
-  },
-  debug: (arg1: any, arg2?: string) => {
-    baseLogger.debug(arg1, arg2);
-    const msg = typeof arg1 === "string" ? arg1 : (arg2 || JSON.stringify(arg1));
-    const meta = typeof arg1 === "object" ? arg1 : undefined;
-    addLogEntry("debug", msg, meta);
-  },
+export const logger = new Proxy(baseLogger, {
+  get(target, prop, receiver) {
+    if (prop === "info") {
+      return (arg1: any, arg2?: string) => {
+        baseLogger.info(arg1, arg2);
+        const msg = typeof arg1 === "string" ? arg1 : (arg2 || JSON.stringify(arg1));
+        const meta = typeof arg1 === "object" ? arg1 : undefined;
+        addLogEntry("info", msg, meta);
+      };
+    }
+    if (prop === "warn") {
+      return (arg1: any, arg2?: string) => {
+        baseLogger.warn(arg1, arg2);
+        const msg = typeof arg1 === "string" ? arg1 : (arg2 || JSON.stringify(arg1));
+        const meta = typeof arg1 === "object" ? arg1 : undefined;
+        addLogEntry("warn", msg, meta);
+      };
+    }
+    if (prop === "error") {
+      return (arg1: any, arg2?: string) => {
+        baseLogger.error(arg1, arg2);
+        const msg = typeof arg1 === "string" ? arg1 : (arg2 || (arg1?.err?.message ?? JSON.stringify(arg1)));
+        const meta = typeof arg1 === "object" ? arg1 : undefined;
+        addLogEntry("error", msg, meta);
+      };
+    }
+    if (prop === "debug") {
+      return (arg1: any, arg2?: string) => {
+        baseLogger.debug(arg1, arg2);
+        const msg = typeof arg1 === "string" ? arg1 : (arg2 || JSON.stringify(arg1));
+        const meta = typeof arg1 === "object" ? arg1 : undefined;
+        addLogEntry("debug", msg, meta);
+      };
+    }
+    const val = Reflect.get(target, prop, receiver);
+    if (typeof val === "function") {
+      return val.bind(target);
+    }
+    return val;
+  }
 }) as any;
 
