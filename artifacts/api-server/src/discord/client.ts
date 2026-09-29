@@ -94,6 +94,17 @@ export async function startDiscordBot(): Promise<void> {
 
   console.log("[boot] setting up REST");
   const rest = new REST({ version: "10" }).setToken(token);
+  
+  try {
+    console.log("[boot] testing token with REST API...");
+    const botUser = await rest.get(Routes.user()) as any;
+    console.log(`[boot] token is VALID. Bot User: ${botUser.username}#${botUser.discriminator} (ID: ${botUser.id})`);
+  } catch (restErr: any) {
+    console.error("[boot] FAILED to validate token via REST API!");
+    console.error(`[boot] REST Error: ${restErr.message || restErr}`);
+    throw restErr;
+  }
+
   // Only register commands within Discord's 100-command limit.
   // Fun/game commands are excluded via getGuildCommands() in registry.ts.
   console.log("[boot] fetching registrableCommands");
@@ -1763,7 +1774,14 @@ export async function startDiscordBot(): Promise<void> {
   try {
     logger.info("Logging into Discord Gateway...");
     console.log(`[boot] Attempting client.login() with token of length ${token.length}`);
-    const loginResult = await client.login(token);
+    
+    // Set a timeout for client.login
+    const loginPromise = client.login(token);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Discord login TIMED OUT after 30 seconds")), 30000)
+    );
+    
+    const loginResult = await Promise.race([loginPromise, timeoutPromise]) as string;
     logger.info({ loginResult: loginResult ? "REDACTED_SUCCESS" : "EMPTY" }, "client.login() token authenticated successfully!");
     console.log("[boot] client.login() resolved");
   } catch (err: any) {
