@@ -1,0 +1,38 @@
+{
+  "name": "workspace",
+  "version": "0.0.0",
+  "license": "MIT",
+  "workspaces": [
+    "artifacts/*",
+    "lib/*",
+    "scripts"
+  ],
+  "scripts": {
+    "build": "npx pnpm run typecheck && npx pnpm run build:apps",
+    "build:apps": "pnpm --filter @workspace/api-server run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "npx pnpm run typecheck:libs && npx pnpm run typecheck:apps",
+    "typecheck:apps": "npx pnpm -r --if-present run typecheck",
+    "dev": "npx pnpm --filter @workspace/api-server run dev",
+    "start": "node index.js"
+  },
+  "private": true,
+  "devDependencies": {
+    "prettier": "^3.8.3",
+    "typescript": "~5.9.3",
+    "tsx": "^4.21.0"
+  },
+  "overrides": {
+    "drizzle-orm": "^0.45.2",
+    "lucide-react": "^0.545.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "wouter": "^3.3.5",
+    "zod": "^3.25.76",
+    "@tanstack/react-query": "^5.90.21"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.9",
+    "sharp": "^0.35.4"
+  }
+}
