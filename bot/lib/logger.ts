@@ -36,7 +36,7 @@ const baseLogger = pino({
   ],
 });
 
-export const logger = {
+export const logger = Object.assign(Object.create(Object.getPrototypeOf(baseLogger)), baseLogger, {
   info: (arg1: any, arg2?: string) => {
     baseLogger.info(arg1, arg2);
     const msg = typeof arg1 === "string" ? arg1 : (arg2 || JSON.stringify(arg1));
@@ -61,5 +61,5 @@ export const logger = {
     const meta = typeof arg1 === "object" ? arg1 : undefined;
     addLogEntry("debug", msg, meta);
   },
-} as any;
+}) as any;
 
