@@ -82,6 +82,14 @@ export async function startDiscordBot(): Promise<void> {
       partials: [Partials.Channel, Partials.Message],
     });
 
+    client.on(Events.Debug, (info) => {
+      if (info.includes("Heartbeat") || info.includes("Latency") || info.includes("Session")) {
+        // skip noisy logs
+      } else {
+        console.log(`[discord-debug] ${info}`);
+      }
+    });
+
     (globalThis as any).__discordClient = client;
 
   console.log("[boot] setting up REST");
@@ -1754,8 +1762,10 @@ export async function startDiscordBot(): Promise<void> {
 
   try {
     logger.info("Logging into Discord Gateway...");
-    await client.login(token);
-    logger.info("client.login() token authenticated successfully!");
+    console.log(`[boot] Attempting client.login() with token of length ${token.length}`);
+    const loginResult = await client.login(token);
+    logger.info({ loginResult: loginResult ? "REDACTED_SUCCESS" : "EMPTY" }, "client.login() token authenticated successfully!");
+    console.log("[boot] client.login() resolved");
   } catch (err: any) {
     isBotStartingOrStarted = false;
     try { client.destroy(); } catch {}
